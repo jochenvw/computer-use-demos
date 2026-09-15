@@ -1,0 +1,17 @@
+[project]
+name = "sre-agent"
+version = "0.1.0"
+description = "SRE-style Operational Reliability Agent for plant manager demo"
+requires-python = ">=3.11"
+dependencies = [
+    "azure-ai-projects>=1.0.0b11",
+    "azure-identity>=1.20.0",
+    "pyautogui>=0.9.54",
+    "Pillow>=11.0.0",
+    "a2a-sdk[http-server]>=0.3.25",
+    "uvicorn>=0.34.0",
+    "rich>=13.9.0",
+]
+
+[project.scripts]
+sre-agent = "main:main"

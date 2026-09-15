@@ -1,0 +1,32 @@
+# IDE and build output
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Python
+**/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local configuration and runtime data
+**/.env
+**/.env.*
+!**/.env.example
+**/memory.json
+**/audit.jsonl
+**/jobs/
+**/BrowserProfile/
+**/screenshots/
+**/downloads/
+**/dist/
+*.log
+
+# Packages and archives
+*.zip
+
+# OS files
+Thumbs.db
+.DS_Store

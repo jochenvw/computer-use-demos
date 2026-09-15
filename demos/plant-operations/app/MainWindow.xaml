@@ -1,0 +1,629 @@
+﻿<Window x:Class="plant_manager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:plant_manager"
+        xmlns:conv="clr-namespace:plant_manager.Converters"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+        mc:Ignorable="d"
+        Title="North Sea Alpha — Plant Manager v4.7.2 [SIMULATION MODE]"
+        Height="900" Width="1400"
+        WindowStartupLocation="CenterScreen"
+        Background="#FFD4D0C8"
+        FontFamily="Segoe UI"
+        FontSize="12">
+
+    <Window.Resources>
+        <conv:AlarmPriorityToColorConverter x:Key="AlarmPriorityToColor"/>
+        <conv:AlarmStateToOpacityConverter x:Key="AlarmStateToOpacity"/>
+        <conv:StabilityScoreToColorConverter x:Key="StabilityToColor"/>
+        <conv:HighTempToColorConverter x:Key="HighTempToColor"/>
+        <conv:HighPressureToColorConverter x:Key="HighPressureToColor"/>
+        <conv:HealthStateToColorConverter x:Key="HealthToColor"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:PlantStatusToBackgroundConverter x:Key="StatusToBg"/>
+        <conv:PlantStatusToForegroundConverter x:Key="StatusToFg"/>
+        <conv:PlantStatusToBorderConverter x:Key="StatusToBorder"/>
+        <conv:AlarmCountToColorConverter x:Key="AlarmCountToColor"/>
+
+        <!-- Legacy-style button -->
+        <Style x:Key="ToolbarBtn" TargetType="Button">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="MinWidth" Value="60"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- ═══════════ TOP TOOLBAR ═══════════ -->
+        <Border DockPanel.Dock="Top" Background="#FFE0DCD4" BorderBrush="#FF808080"
+                BorderThickness="0,0,0,1" Padding="4,3">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="⟳ Refresh" Style="{StaticResource ToolbarBtn}"
+                            Command="{Binding RefreshCommand}"/>
+                    <Button Content="⚠ Acknowledge Alarm" Style="{StaticResource ToolbarBtn}"
+                            Click="AcknowledgeAlarm_Click"/>
+                    <Button Content="📋 Open Procedure" Style="{StaticResource ToolbarBtn}"
+                            Click="OpenProcedure_Click"/>
+                    <Button Content="📈 Trend View" Style="{StaticResource ToolbarBtn}"
+                            Click="TrendView_Click"/>
+                    <Button Content="🔧 Asset Details" Style="{StaticResource ToolbarBtn}"
+                            Click="AssetDetails_Click"/>
+                    <Button Content="🎛 Manual Control" Style="{StaticResource ToolbarBtn}"
+                            Click="ManualControl_Click"/>
+                    <Button Content="📊 Incident Summary" Style="{StaticResource ToolbarBtn}"
+                            Click="IncidentSummary_Click"/>
+                    <Separator Margin="6,0"/>
+                    <Button Content="▶ Scenario 1: High Temp" Style="{StaticResource ToolbarBtn}"
+                            Command="{Binding LoadScenario1Command}" Foreground="DarkRed"/>
+                    <Button Content="▶ Scenario 2: Sep Press" Style="{StaticResource ToolbarBtn}"
+                            Command="{Binding LoadScenario2Command}" Foreground="DarkRed"/>
+                    <Button Content="▶ Scenario 3: Cooling" Style="{StaticResource ToolbarBtn}"
+                            Command="{Binding LoadScenario3Command}" Foreground="DarkRed"/>
+                    <Button Content="⏹ Reset Demo" Style="{StaticResource ToolbarBtn}"
+                            Command="{Binding ResetDemoCommand}" Foreground="DarkBlue"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" Margin="8,0" FontSize="11">
+                    <Run Text="● " Foreground="Lime" FontSize="14"/>
+                    <Run Text="Connected: North Sea Alpha Simulation"/>
+                </TextBlock>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════ BOTTOM STATUS BAR ═══════════ -->
+        <Border DockPanel.Dock="Bottom" Background="#FFE0DCD4" BorderBrush="#FF808080"
+                BorderThickness="0,1,0,0" Padding="6,3">
+            <DockPanel>
+                <TextBlock FontSize="11" FontFamily="Consolas">
+                    <Run Text="TIME: "/><Run Text="{Binding Engine.SimTime, StringFormat='yyyy-MM-dd HH:mm:ss', Mode=OneWay}" FontWeight="Bold"/>
+                    <Run Text="   |   OPERATOR: J. Hansen"/>
+                    <Run Text="   |   ALARMS: "/><Run Text="{Binding ActiveAlarmCount, Mode=OneWay}" FontWeight="Bold" Foreground="{Binding ActiveAlarmCount, Converter={StaticResource AlarmCountToColor}, Mode=OneWay}"/>
+                    <Run Text="   |   COMM: OK"/>
+                    <Run Text="   |   MODE: SIMULATION"/>
+                </TextBlock>
+                <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right" FontSize="11"
+                           Text="{Binding Engine.ScenarioStatus}" FontFamily="Consolas"
+                           Foreground="DarkBlue"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════ MAIN CONTENT AREA ═══════════ -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180"/>   <!-- Left nav -->
+                <ColumnDefinition Width="*"/>     <!-- Center tabs -->
+                <ColumnDefinition Width="250"/>   <!-- Right summary -->
+            </Grid.ColumnDefinitions>
+
+            <!-- ─── LEFT NAV PANEL ─── -->
+            <Border Grid.Column="0" BorderBrush="#FF808080" BorderThickness="0,0,1,0"
+                    Background="#FFECECEC">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text=" ASSETS" FontWeight="Bold"
+                               Background="#FF000060" Foreground="White" Padding="6,4" FontSize="11"/>
+                    <ListBox x:Name="AssetList" BorderThickness="0" Background="Transparent"
+                             FontSize="11" Padding="2"
+                             SelectedItem="{Binding SelectedAsset, Mode=TwoWay}">
+                        <ListBoxItem Content="Facility Overview" IsSelected="True"/>
+                        <ListBoxItem Content="Separation Train"/>
+                        <ListBoxItem Content="Compressor C-101"/>
+                        <ListBoxItem Content="Compressor C-102"/>
+                        <ListBoxItem Content="Export Pump P-201"/>
+                        <ListBoxItem Content="Cooling Loop"/>
+                        <ListBoxItem Content="Flare System"/>
+                        <ListBoxItem Content="Produced Water"/>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- ─── CENTER TABBED WORKSPACE ─── -->
+            <TabControl Grid.Column="1" Margin="2"
+                        SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}"
+                        FontSize="11" x:Name="MainTabs">
+
+                <!-- ══ OVERVIEW TAB ══ -->
+                <TabItem Header=" Overview ">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
+                        <StackPanel>
+                            <TextBlock Text="FACILITY OVERVIEW — NORTH SEA ALPHA" FontWeight="Bold"
+                                       FontSize="13" Background="#FF003366" Foreground="White"
+                                       Padding="8,4" Margin="0,0,0,6"/>
+
+                            <!-- Degraded/Abnormal banner -->
+                            <Border Background="{Binding PlantStatusText, Converter={StaticResource StatusToBg}}"
+                                    BorderBrush="{Binding PlantStatusText, Converter={StaticResource StatusToBorder}}"
+                                    BorderThickness="2" Padding="8,5" Margin="0,0,0,6"
+                                    Visibility="{Binding IsDegraded, Converter={StaticResource BoolToVis}}">
+                                <DockPanel>
+                                    <TextBlock Text="⚠" FontSize="18" VerticalAlignment="Center"
+                                               Margin="0,0,8,0"
+                                               Foreground="{Binding PlantStatusText, Converter={StaticResource StatusToFg}}"/>
+                                    <StackPanel>
+                                        <TextBlock FontSize="13" FontWeight="Bold" FontFamily="Consolas"
+                                                   Foreground="{Binding PlantStatusText, Converter={StaticResource StatusToFg}}">
+                                            <Run Text="PLANT STATUS: "/>
+                                            <Run Text="{Binding PlantStatusText, Mode=OneWay}"/>
+                                            <Run Text=" — Stability: "/>
+                                            <Run Text="{Binding Engine.State.StabilityScore, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                                            <Run Text="/100"/>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding RecommendedAction}" FontSize="11"
+                                                   Foreground="{Binding PlantStatusText, Converter={StaticResource StatusToFg}}"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Process values grid -->
+                            <UniformGrid Columns="3" Margin="0,0,0,8">
+                                <!-- Separator Pressure -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="SEP-01 Vessel Pressure" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas"
+                                                   Foreground="{Binding Engine.State.Sep01Pressure, Converter={StaticResource HighPressureToColor}}">
+                                            <Run Text="{Binding Engine.State.Sep01Pressure, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                            <Run Text=" barg" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 32.0 | HI: 36.0 | HH: 40.0"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- C-101 Discharge Temp -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="C-101 Discharge Temp" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas"
+                                                   Foreground="{Binding Engine.State.C101DischargeTemp, Converter={StaticResource HighTempToColor}}">
+                                            <Run Text="{Binding Engine.State.C101DischargeTemp, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                            <Run Text=" °C" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 142 | HI: 155 | HH: 165"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- C-101 Suction Pressure -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="C-101 Suction Pressure" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas"
+                                                   Foreground="{Binding Engine.State.C101SuctionPressure, Converter={StaticResource HighPressureToColor}}">
+                                            <Run Text="{Binding Engine.State.C101SuctionPressure, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                            <Run Text=" barg" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 48.5"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- P-201 Flow Rate -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="P-201 Export Flow" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas">
+                                            <Run Text="{Binding Engine.State.P201FlowRate, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                                            <Run Text=" m³/h" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 1250"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- SEP-01 Level -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="SEP-01 Level" FontSize="10" Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas">
+                                            <Run Text="{Binding Engine.State.Sep01Level, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                            <Run Text=" %" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 62%"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- C-101 Vibration -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="C-101 Vibration" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas">
+                                            <Run Text="{Binding Engine.State.C101Vibration, StringFormat='{}{0:F2}', Mode=OneWay}"/>
+                                            <Run Text=" mm/s" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 2.1 | HI: 6.0"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CL-01 Cooling Efficiency -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="CL-01 Cooling Efficiency" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas">
+                                            <Run Text="{Binding Engine.State.CL01CoolingEfficiency, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                            <Run Text=" %" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 94% | LO: 85%"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- FLR-01 Flare Valve -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="FLR-01 Flare Valve" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Consolas">
+                                            <Run Text="{Binding Engine.State.FLR01ValvePosition, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                            <Run Text=" %" FontSize="12" FontWeight="Normal"/>
+                                        </TextBlock>
+                                        <TextBlock Text="NOM: 12%"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Recycle Valve -->
+                                <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                        Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="Recycle Valve State" FontSize="10"
+                                                   Foreground="Gray"/>
+                                        <TextBlock Text="{Binding Engine.State.RecycleValveState}"
+                                                   FontSize="22" FontWeight="Bold" FontFamily="Consolas"/>
+                                        <TextBlock Text="Mode: AUTO expected"
+                                                   FontSize="9" Foreground="Gray"/>
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
+
+                            <!-- Feed Rate bar -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Margin="3" Padding="6"
+                                    Background="White">
+                                <DockPanel>
+                                    <TextBlock Text="Feed Rate: " VerticalAlignment="Center"/>
+                                    <TextBlock FontWeight="Bold" FontFamily="Consolas"
+                                               VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <Run Text="{Binding Engine.State.FeedRate, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                        <Run Text=" %"/>
+                                    </TextBlock>
+                                    <ProgressBar Value="{Binding Engine.State.FeedRate, Mode=OneWay}"
+                                                 Minimum="50" Maximum="110" Height="18"
+                                                 Foreground="#FF006400"/>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ══ ALARMS TAB ══ -->
+                <TabItem Header=" Alarms ">
+                    <DockPanel Margin="4">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                            <Button Content="Acknowledge" Padding="8,3" Margin="2"
+                                    Click="AcknowledgeAlarm_Click"/>
+                            <Button Content="Shelve" Padding="8,3" Margin="2"
+                                    Click="ShelveAlarm_Click"/>
+                            <Button Content="Open Related Procedure" Padding="8,3" Margin="2"
+                                    Click="OpenRelatedProcedure_Click"/>
+                            <Button Content="Show Asset" Padding="8,3" Margin="2"
+                                    Click="ShowAsset_Click"/>
+                        </StackPanel>
+                        <DataGrid x:Name="AlarmGrid"
+                                  ItemsSource="{Binding Engine.Alarms}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserSortColumns="True"
+                                  GridLinesVisibility="All"
+                                  HeadersVisibility="Column"
+                                  FontFamily="Consolas"
+                                  FontSize="11"
+                                  RowHeaderWidth="0"
+                                  SelectionMode="Single"
+                                  AlternatingRowBackground="#FFF5F5F5"
+                                  BorderBrush="Gray" BorderThickness="1">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Setter Property="Opacity"
+                                            Value="{Binding State, Converter={StaticResource AlarmStateToOpacity}}"/>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Time" Width="140"
+                                    Binding="{Binding Timestamp, StringFormat='HH:mm:ss dd-MMM'}"/>
+                                <DataGridTextColumn Header="Pri" Width="60"
+                                    Binding="{Binding Priority}"/>
+                                <DataGridTextColumn Header="Asset" Width="70"
+                                    Binding="{Binding Asset}"/>
+                                <DataGridTextColumn Header="Tag" Width="120"
+                                    Binding="{Binding Tag}"/>
+                                <DataGridTextColumn Header="Description" Width="280"
+                                    Binding="{Binding Description}"/>
+                                <DataGridTextColumn Header="State" Width="90"
+                                    Binding="{Binding State}"/>
+                                <DataGridTextColumn Header="Ack By" Width="80"
+                                    Binding="{Binding AcknowledgedBy}"/>
+                                <DataGridTextColumn Header="Notes" Width="*"
+                                    Binding="{Binding Notes}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- ══ TRENDS TAB ══ -->
+                <TabItem Header=" Trends ">
+                    <Grid Margin="4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="1" Margin="2"
+                                Background="White">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text=" C-101 Discharge Temperature (°C)"
+                                           Background="#FF003366" Foreground="White" Padding="4,2"
+                                           FontSize="10"/>
+                                <lvc:CartesianChart x:Name="ChartTemp" />
+                            </DockPanel>
+                        </Border>
+
+                        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Margin="2"
+                                Background="White">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text=" SEP-01 Vessel Pressure (barg)"
+                                           Background="#FF003366" Foreground="White" Padding="4,2"
+                                           FontSize="10"/>
+                                <lvc:CartesianChart x:Name="ChartPressure" />
+                            </DockPanel>
+                        </Border>
+
+                        <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1" Margin="2"
+                                Background="White">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text=" P-201 Export Flow (m³/h)"
+                                           Background="#FF003366" Foreground="White" Padding="4,2"
+                                           FontSize="10"/>
+                                <lvc:CartesianChart x:Name="ChartFlow" />
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- ══ EQUIPMENT TAB ══ -->
+                <TabItem Header=" Equipment ">
+                    <DataGrid ItemsSource="{Binding Engine.Equipment}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              GridLinesVisibility="All"
+                              HeadersVisibility="Column"
+                              FontFamily="Consolas"
+                              FontSize="11"
+                              RowHeaderWidth="0"
+                              Margin="4"
+                              AlternatingRowBackground="#FFF5F5F5"
+                              BorderBrush="Gray" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Equipment" Width="180"
+                                Binding="{Binding Name}"/>
+                            <DataGridTextColumn Header="Tag" Width="70"
+                                Binding="{Binding TagPrefix}"/>
+                            <DataGridTextColumn Header="Mode" Width="70"
+                                Binding="{Binding Mode}"/>
+                            <DataGridTextColumn Header="Health" Width="90"
+                                Binding="{Binding HealthState}"/>
+                            <DataGridTextColumn Header="Run State" Width="80"
+                                Binding="{Binding RunState}"/>
+                            <DataGridTextColumn Header="Last Inspection" Width="110"
+                                Binding="{Binding LastInspection}"/>
+                            <DataGridTextColumn Header="Maint. Note" Width="220"
+                                Binding="{Binding MaintenanceNote}"/>
+                            <DataGridTextColumn Header="Setpoint" Width="80"
+                                Binding="{Binding CurrentSetpoint, StringFormat='{}{0:F1}'}"/>
+                            <DataGridTextColumn Header="Output" Width="80"
+                                Binding="{Binding CurrentOutput, StringFormat='{}{0:F1}'}"/>
+                            <DataGridCheckBoxColumn Header="Override" Width="60"
+                                Binding="{Binding ManualOverride}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <!-- ══ PROCEDURES TAB ══ -->
+                <TabItem Header=" Procedures ">
+                    <DockPanel Margin="4">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Select Procedure: " VerticalAlignment="Center"
+                                       FontWeight="Bold" Margin="0,0,4,0"/>
+                            <ComboBox x:Name="ProcedureCombo" Width="320"
+                                      ItemsSource="{Binding ProcedureNames}"
+                                      SelectedItem="{Binding SelectedProcedureName, Mode=TwoWay}"
+                                      FontSize="11"/>
+                        </StackPanel>
+                        <Border BorderBrush="Gray" BorderThickness="1" Background="#FFFFF8E8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding SelectedProcedureText}"
+                                           FontFamily="Consolas" FontSize="11"
+                                           Padding="10" TextWrapping="Wrap"/>
+                            </ScrollViewer>
+                        </Border>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- ══ OPERATOR LOG TAB ══ -->
+                <TabItem Header=" Operator Log ">
+                    <DataGrid ItemsSource="{Binding Engine.OperatorLog}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column"
+                              FontFamily="Consolas"
+                              FontSize="11"
+                              RowHeaderWidth="0"
+                              Margin="4"
+                              AlternatingRowBackground="#FFF5F5F5"
+                              BorderBrush="Gray" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Time" Width="140"
+                                Binding="{Binding Timestamp, StringFormat='HH:mm:ss dd-MMM'}"/>
+                            <DataGridTextColumn Header="Category" Width="100"
+                                Binding="{Binding Category}"/>
+                            <DataGridTextColumn Header="Message" Width="*"
+                                Binding="{Binding Message}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+            </TabControl>
+
+            <!-- ─── RIGHT SUMMARY PANEL ─── -->
+            <Border Grid.Column="2" BorderBrush="#FF808080" BorderThickness="1,0,0,0"
+                    Background="#FFECECEC">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top"
+                            Background="{Binding PlantStatusText, Converter={StaticResource StatusToBorder}}"
+                            Padding="6,4">
+                        <TextBlock FontWeight="Bold" Foreground="White" FontSize="11">
+                            <Run Text=" PLANT STATUS — "/>
+                            <Run Text="{Binding PlantStatusText, Mode=OneWay}"/>
+                        </TextBlock>
+                    </Border>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8">
+                            <!-- Status indicator -->
+                            <Border BorderBrush="{Binding PlantStatusText, Converter={StaticResource StatusToBorder}}"
+                                    BorderThickness="3" Padding="6" Margin="0,0,0,6"
+                                    Background="{Binding PlantStatusText, Converter={StaticResource StatusToBg}}">
+                                <StackPanel>
+                                    <TextBlock Text="Overall Status" FontSize="10" Foreground="#FF555555"/>
+                                    <TextBlock Text="{Binding PlantStatusText}"
+                                               FontSize="22" FontWeight="Bold"
+                                               FontFamily="Consolas"
+                                               Foreground="{Binding PlantStatusText, Converter={StaticResource StatusToFg}}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Active alarms -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Padding="6" Margin="0,0,0,6"
+                                    Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="Active Alarms" FontSize="10" Foreground="Gray"/>
+                                    <TextBlock FontSize="20" FontWeight="Bold" FontFamily="Consolas">
+                                        <Run Text="{Binding ActiveAlarmCount, Mode=OneWay}"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Highest priority alarm -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Padding="6" Margin="0,0,0,6"
+                                    Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="Highest Priority Alarm" FontSize="10"
+                                               Foreground="Gray"/>
+                                    <TextBlock Text="{Binding HighestPriorityAlarm}"
+                                               FontSize="11" FontFamily="Consolas"
+                                               TextWrapping="Wrap" Foreground="DarkRed"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Production rate -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Padding="6" Margin="0,0,0,6"
+                                    Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="Production Rate" FontSize="10" Foreground="Gray"/>
+                                    <TextBlock FontSize="18" FontWeight="Bold" FontFamily="Consolas">
+                                        <Run Text="{Binding Engine.State.ProductionRate, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                                        <Run Text=" bbl/d" FontSize="11" FontWeight="Normal"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Stability score -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Padding="6" Margin="0,0,0,6"
+                                    Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="Stability Score" FontSize="10" Foreground="Gray"/>
+                                    <TextBlock FontSize="20" FontWeight="Bold" FontFamily="Consolas"
+                                               Foreground="{Binding Engine.State.StabilityScore, Converter={StaticResource StabilityToColor}}">
+                                        <Run Text="{Binding Engine.State.StabilityScore, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                                        <Run Text=" / 100" FontSize="11" FontWeight="Normal"
+                                             Foreground="Gray"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Feed Rate -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Padding="6" Margin="0,0,0,6"
+                                    Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="Feed Rate" FontSize="10" Foreground="Gray"/>
+                                    <TextBlock FontSize="16" FontWeight="Bold" FontFamily="Consolas">
+                                        <Run Text="{Binding Engine.State.FeedRate, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                        <Run Text=" %" FontSize="11" FontWeight="Normal"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Cooling Target -->
+                            <Border BorderBrush="Gray" BorderThickness="1" Padding="6" Margin="0,0,0,6"
+                                    Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="Cooling Target" FontSize="10" Foreground="Gray"/>
+                                    <TextBlock FontSize="16" FontWeight="Bold" FontFamily="Consolas">
+                                        <Run Text="{Binding Engine.State.CL01CoolingTarget, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                        <Run Text=" °C" FontSize="11" FontWeight="Normal"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Recommended action -->
+                            <Border BorderBrush="DarkOrange" BorderThickness="2" Padding="6"
+                                    Margin="0,0,0,6" Background="#FFFFF0D0">
+                                <StackPanel>
+                                    <TextBlock Text="⚠ RECOMMENDED ACTION" FontSize="10"
+                                               FontWeight="Bold" Foreground="DarkOrange"/>
+                                    <TextBlock Text="{Binding RecommendedAction}"
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Quick action buttons -->
+                            <TextBlock Text="QUICK ACTIONS" FontSize="10" FontWeight="Bold"
+                                       Foreground="Gray" Margin="0,8,0,4"/>
+                            <Button Content="🎛 Adjust Feed Rate" Margin="0,2" Padding="6,4"
+                                    Click="AdjustFeedRate_Click" HorizontalContentAlignment="Left"/>
+                            <Button Content="❄ Set Cooling Target" Margin="0,2" Padding="6,4"
+                                    Click="SetCoolingTarget_Click" HorizontalContentAlignment="Left"/>
+                            <Button Content="🔄 Toggle Recycle Valve" Margin="0,2" Padding="6,4"
+                                    Click="ToggleRecycleValve_Click" HorizontalContentAlignment="Left"/>
+                            <Button Content="✅ Apply Stabilization Plan" Margin="0,2" Padding="6,4"
+                                    Click="ApplyStabilization_Click" HorizontalContentAlignment="Left"
+                                    FontWeight="Bold"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
