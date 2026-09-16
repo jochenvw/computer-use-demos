@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
-JOB_ID = re.compile(r"^[0-9a-f]{32}$")
+HEX32 = re.compile(r"^[0-9a-f]{32}$")
 FORMATS = {"fhir", "fhir-xml", "hl7", "json", "ndjson"}
 
 
@@ -42,19 +42,23 @@ def upstream_origin(value: str, allow_loopback: bool = False) -> str:
 def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: str = "fhir") -> str:
     if kind == "jobs":
         return "/v1/retrieval-jobs"
-    if not JOB_ID.fullmatch(job_id):
+    if not HEX32.fullmatch(job_id):
         raise ValueError("Invalid job identifier.")
     if kind == "status":
         return f"/v1/retrieval-jobs/{job_id}"
-    if kind == "result" and output_format in FORMATS:
+    if kind == "result":
+        if output_format not in FORMATS:
+            raise ValueError("Unsupported output format.")
         return f"/v1/retrieval-jobs/{job_id}/result?format={output_format}"
-    if kind == "file" and JOB_ID.fullmatch(file_id):
+    if kind == "file" and HEX32.fullmatch(file_id):
         return f"/v1/retrieval-jobs/{job_id}/files/{file_id}"
+    if kind == "file":
+        raise ValueError("Invalid file identifier.")
     raise ValueError("Invalid relay request.")
 
 
 def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, body: bytes | None = None):
-    headers = {"Authorization": "Bearer" + " " + bearer, "Accept": "*/*"}
+    headers = {"Authorization": f"{'Bearer'} {bearer}", "Accept": "*/*"}
     if tunnel_token:
         headers["X-Tunnel-Authorization"] = f"tunnel {tunnel_token}"
     if body is not None:
@@ -145,7 +149,11 @@ def make_handler(csrf: str, allow_loopback: bool):
                     "body": response.decode("utf-8", "replace"),
                     "headers": {k: headers.get(k, "") for k in ("X-Retrieval-Cache", "X-Collected-At", "X-Cache-Expires-At")},
                 }).encode())
-            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            except KeyError as exc:
+                self._send(400, json.dumps({"error": f"Missing required field: {exc.args[0]}."}).encode())
+            except TypeError:
+                self._send(400, b'{"error":"Request fields have invalid types."}')
+            except (ValueError, json.JSONDecodeError) as exc:
                 self._send(400, json.dumps({"error": str(exc)}).encode())
 
     return Handler
