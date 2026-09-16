@@ -10,7 +10,15 @@ from .adapters.base import EhrAdapter
 from .audit import AuditWriter
 from .cache import RetrievalCache
 from .file_catalog import FileCatalog
-from .models import ClinicalBundle, JobRecord, JobStatus, ResourceType, RetrievalRequest, RetrievalSource
+from .models import (
+    CacheStatus,
+    ClinicalBundle,
+    JobRecord,
+    JobStatus,
+    ResourceType,
+    RetrievalRequest,
+    RetrievalSource,
+)
 from .progress import emit
 
 logger = logging.getLogger(__name__)
@@ -96,8 +104,11 @@ class JobService:
                 if request.bypass_cache:
                     self._cache.invalidate(key)
                 entry = None if request.bypass_cache else self._cache.get(key)
-                job.cache_status = "bypass" if request.bypass_cache else "hit" if entry else "miss"
-                emit(f"CACHE    {job.cache_status}")
+                job.cache_status = (
+                    CacheStatus.bypass if request.bypass_cache
+                    else CacheStatus.hit if entry else CacheStatus.miss
+                )
+                emit(f"CACHE    {job.cache_status.value}")
                 if entry is None:
                     resources = []
                     files = []
@@ -121,13 +132,7 @@ class JobService:
                         resources = [
                             resource for resource in resources
                             if resource.resource_type != ResourceType.observations
-                            or codes.intersection(
-                                str(coding.get("code", ""))
-                                for concept in [resource.data.get("code", {})] + [
-                                    part.get("code", {}) for part in resource.data.get("component", [])
-                                ]
-                                for coding in concept.get("coding", [])
-                            )
+                            or _observation_has_code(resource.data, codes)
                         ]
                     bundle = ClinicalBundle(
                         patient_id=request.patient_id, resources=resources, files=files,
@@ -159,3 +164,23 @@ class JobService:
                 logger.error("Audit persistence failed for job %s", job_id)
             job.completed_at = datetime.now(timezone.utc)
             job.status = JobStatus.failed
+
+
+def _observation_has_code(data: dict, codes: set[str]) -> bool:
+    concepts = []
+    root_code = data.get("code")
+    if isinstance(root_code, dict):
+        concepts.append(root_code)
+    components = data.get("component")
+    if isinstance(components, list):
+        for component in components:
+            if isinstance(component, dict) and isinstance(component.get("code"), dict):
+                concepts.append(component["code"])
+    for concept in concepts:
+        codings = concept.get("coding")
+        if not isinstance(codings, list):
+            continue
+        for coding in codings:
+            if isinstance(coding, dict) and str(coding.get("code", "")) in codes:
+                return True
+    return False

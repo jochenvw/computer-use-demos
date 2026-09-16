@@ -23,6 +23,7 @@ class ApiTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app)
         cls.headers = {
+            # Avoid a bearer-shaped test literal; some scanners flag placeholders.
             "Authorization": ("Bear" + "er ") + os.environ["API_BEARER_TOKEN"],
             "X-Caller-Id": "unit-test",
         }

@@ -80,6 +80,12 @@ class JobStatus(str, Enum):
     failed = "failed"
 
 
+class CacheStatus(str, Enum):
+    hit = "hit"
+    miss = "miss"
+    bypass = "bypass"
+
+
 class JobRecord(BaseModel):
     job_id: str = Field(default_factory=lambda: uuid4().hex)
     status: JobStatus = JobStatus.queued
@@ -88,7 +94,7 @@ class JobRecord(BaseModel):
     )
     completed_at: datetime | None = None
     error: str | None = None
-    cache_status: str | None = None
+    cache_status: CacheStatus | None = None
     collected_at: datetime | None = None
     expires_at: datetime | None = None
     bundle: ClinicalBundle | None = Field(default=None, exclude=True)

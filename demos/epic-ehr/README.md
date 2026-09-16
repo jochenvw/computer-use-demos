@@ -212,9 +212,9 @@ multi-user or patient-level authorization.
 |---|---|---|
 | POST | `/v1/retrieval-jobs` | Patient-scoped retrieval (`files`, `ehr`, `both`) |
 | GET | `/v1/retrieval-jobs/{job_id}` | Job status, no clinical result |
+| GET | `/v1/retrieval-jobs/{job_id}/result` | Default: FHIR JSON |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=json` | Normalized JSON |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=fhir` | FHIR R4-style Bundle |
-| GET | `/v1/retrieval-jobs/{job_id}/result` | Default: FHIR JSON |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=fhir-xml` | Explicit-subset FHIR XML |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=hl7` | HL7 v2.5.1 ORU observation/report projection |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=ndjson` | Normalized resource lines |

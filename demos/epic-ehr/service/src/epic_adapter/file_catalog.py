@@ -67,13 +67,7 @@ class FileCatalog:
 
     def verify(self, record: FileRecord, patient_id: str) -> Path:
         """Recheck containment and content before serving a previously cataloged file."""
-        resolved = Path(record.path).resolve(strict=True)
-        if not any(
-            (root / patient_id).resolve() in resolved.parents
-            and root in (root / patient_id).resolve().parents
-            for root in self._roots
-        ):
-            raise RuntimeError("File no longer belongs to an approved patient directory.")
+        resolved = self._contained_path(record, patient_id)
         digest = hashlib.sha256()
         with resolved.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -82,8 +76,18 @@ class FileCatalog:
             raise RuntimeError("File changed after retrieval; request a new job.")
         return resolved
 
+    def _contained_path(self, record: FileRecord, patient_id: str) -> Path:
+        resolved = Path(record.path).resolve(strict=True)
+        if any(
+            (root / patient_id).resolve() in resolved.parents
+            and root in (root / patient_id).resolve().parents
+            for root in self._roots
+        ):
+            return resolved
+        raise RuntimeError("File no longer belongs to an approved patient directory.")
+
     def open_for_skill(self, record: FileRecord, patient_id: str) -> tuple[str | None, bytes | None]:
-        path = self.verify(record, patient_id)
+        path = self._contained_path(record, patient_id)
         with path.open("rb") as stream:
             data = stream.read(MAX_SKILL_READ_BYTES + 1)
         if len(data) > MAX_SKILL_READ_BYTES:

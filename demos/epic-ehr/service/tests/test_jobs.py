@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from epic_adapter.audit import AuditWriter
 from epic_adapter.file_catalog import FileCatalog
 from epic_adapter.jobs import JobService
-from epic_adapter.models import RetrievalRequest
+from epic_adapter.models import ClinicalResource, ResourceType, RetrievalRequest, SourceRecord
 
 
 class JobRoutingTests(unittest.TestCase):
@@ -47,3 +47,37 @@ class JobRoutingTests(unittest.TestCase):
         self.run_job("both")
         self.adapter.retrieve.assert_called_once()
         self.catalog.find.assert_called_once()
+
+    def test_observation_code_filter_ignores_malformed_shapes(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        adapter = Mock()
+        adapter.retrieve.return_value = [
+            ClinicalResource(
+                resource_type=ResourceType.observations,
+                source_id="bad",
+                data={"code": "85354-9", "component": ["not an object"]},
+                provenance=SourceRecord(source="test"),
+            ),
+            ClinicalResource(
+                resource_type=ResourceType.observations,
+                source_id="bp",
+                data={"component": [{
+                    "code": {"coding": [{"code": "85354-9"}]},
+                    "valueString": "120/80",
+                }]},
+                provenance=SourceRecord(source="test"),
+            ),
+        ]
+        jobs = JobService(adapter, Mock(), AuditWriter(root / "audit.jsonl"))
+        job = jobs.create(RetrievalRequest(
+            patient_id="DEMO-100042", source="ehr",
+            resources=["observations"], observation_codes=["85354-9"],
+        ), "test")
+        for _ in range(100):
+            if job.status in {"complete", "failed"}:
+                break
+            time.sleep(0.01)
+        self.assertEqual("complete", job.status)
+        self.assertEqual(["bp"], [resource.source_id for resource in job.bundle.resources])
