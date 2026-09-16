@@ -59,7 +59,7 @@ class TesterTests(unittest.TestCase):
             thread.join()
             server.server_close()
 
-    def test_relay_rejects_missing_csrf_and_host(self):
+    def test_relay_rejects_missing_csrf_and_invalid_host(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler("csrf", True))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -67,6 +67,13 @@ class TesterTests(unittest.TestCase):
             request = Request(
                 f"http://127.0.0.1:{server.server_port}/api/jobs", data=b"{}",
                 headers={"Content-Type": "application/json"}, method="POST",
+            )
+            with self.assertRaises(HTTPError) as error:
+                urlopen(request)
+            self.assertEqual(403, error.exception.code)
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/api/jobs", data=b"{}",
+                headers={"Content-Type": "application/json", "Host": "evil.example", "X-CSRF-Token": "csrf"}, method="POST",
             )
             with self.assertRaises(HTTPError) as error:
                 urlopen(request)

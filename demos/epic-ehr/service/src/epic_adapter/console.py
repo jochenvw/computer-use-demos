@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from urllib.request import urlopen
 
@@ -106,7 +108,21 @@ def run_with_tunnel(console: Console, port: int) -> None:
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         console.print("Opening authenticated dev tunnel; waiting for the actual HTTPS URL.")
-        for line in iter(tunnel.stdout.readline, ""):
+        lines: queue.Queue[str | None] = queue.Queue()
+        def copy_output():
+            for output in iter(tunnel.stdout.readline, ""):
+                lines.put(output)
+            lines.put(None)
+
+        reader = threading.Thread(target=copy_output, daemon=True)
+        reader.start()
+        while True:
+            try:
+                line = lines.get(timeout=.2)
+            except queue.Empty:
+                line = ""
+            if line is None:
+                raise RuntimeError("Dev tunnel exited. Check devtunnel user login and network access.")
             match = re.search(r"https://[a-z0-9.-]+\.devtunnels\.ms(?::443)?", line, re.I)
             if match:
                 console.print(Panel(match.group(0), title="Tunnel HTTPS URL (copy this)", border_style="green"))
