@@ -40,8 +40,24 @@ The agent operates as a visual observer and operator. It captures screenshots of
 
 ```bash
 cd .\demos\plant-operations\agent
-uv sync
+uv sync --locked --default-index https://pypi.org/simple
 ```
+
+The manifest tracks tested stable SDK versions; `uv.lock` records the complete
+dependency set. Prereleases are disabled. Setup uses `--locked` and public PyPI;
+launch commands use `--frozen` so ambient index settings cannot rewrite the lock.
+The PowerShell launchers use the existing virtual environment directly.
+To refresh dependencies from public PyPI:
+
+```powershell
+uv lock --upgrade --default-index https://pypi.org/simple
+uv sync --locked --default-index https://pypi.org/simple
+uv run --frozen --no-sync python -m unittest discover -p "test_*.py" -v
+```
+
+The regression checks use in-process HTTP transports and synthetic images. They
+exercise SDK client construction, Responses/chat serialization, and A2A discovery
+and task completion without Azure credentials, model calls, or desktop actions.
 
 ## Configuration
 
@@ -57,11 +73,11 @@ uv sync
 $env:AZURE_AI_FOUNDRY_ENDPOINT = "https://your-resource.services.ai.azure.com"
 
 # Start the WPF app first, trigger Scenario 1, then:
-uv run python main.py --once       # dry-run mode
+uv run --frozen python main.py --once       # dry-run mode
 
 $env:ALLOW_COMPUTER_CONTROL = "1"
-uv run python main.py --once --live
-uv run python main.py --once --live --verbose
+uv run --frozen python main.py --once --live
+uv run --frozen python main.py --once --live --verbose
 ```
 
 ## A2A Server Mode
@@ -85,15 +101,23 @@ Do not expose it on a network without adding authentication and TLS.
 
 Or directly:
 ```powershell
-uv run python a2a_server.py --port 10100
+uv run --frozen python a2a_server.py --port 10100
 ```
 
 ### Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/.well-known/agent.json` | GET | A2A agent card (discovery) |
-| `/` | POST | JSON-RPC endpoint (tasks/send) |
+| `/.well-known/agent-card.json` | GET | A2A agent card (discovery) |
+| `/.well-known/agent.json` | GET | Legacy discovery alias |
+| `/` | POST | A2A 1.0 JSON-RPC (`SendMessage`, `GetTask`, etc.) |
+
+The server uses the A2A SDK 1.x protobuf models and route builders. Native A2A 1.0
+requests must send `A2A-Version: 1.0`; use `configuration.returnImmediately: false`
+to wait for completion. A2A 0.3 JSON-RPC methods such as `message/send` remain
+enabled through the SDK's compatibility adapter, including their existing
+`configuration.blocking` option. Status updates and artifacts are awaited and
+associated with an initial task, and active SDK tasks are drained on shutdown.
 
 ### Agent Card
 
