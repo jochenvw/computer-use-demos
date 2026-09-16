@@ -125,9 +125,14 @@ def make_handler(csrf: str, allow_loopback: bool):
                     length = int(self.headers.get("Content-Length", "0"))
                 except ValueError as exc:
                     raise ValueError("Invalid Content-Length header.") from exc
+                if length < 0:
+                    raise ValueError("Invalid Content-Length header.")
                 if length > 16384:
                     raise ValueError("Request is too large.")
-                data = json.loads(self.rfile.read(length))
+                try:
+                    data = json.loads(self.rfile.read(length))
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Request body must be valid JSON.") from exc
                 origin = upstream_origin(data["tunnel_url"], allow_loopback)
                 bearer, tunnel = data["bearer_token"], data.get("tunnel_token", "")
                 if not isinstance(bearer, str) or not bearer:
