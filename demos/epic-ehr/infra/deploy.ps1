@@ -5,6 +5,7 @@ param(
     [string]$Location = 'swedencentral',
     [ValidatePattern('^[a-z][a-z0-9]{2,11}$')][string]$Prefix = 'epicdemo',
     [string]$VmSize = 'Standard_D4as_v5',
+    [string]$ArtifactPublisherPrincipalId,
     [switch]$ValidateOnly
 )
 
@@ -14,6 +15,12 @@ if ($env:OS -ne 'Windows_NT') {
 }
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Install Azure CLI and run az login before deploying.'
+}
+if (-not $ArtifactPublisherPrincipalId) {
+    $ArtifactPublisherPrincipalId = & az ad signed-in-user show --query id --output tsv --only-show-errors
+    if ($LASTEXITCODE -ne 0 -or -not $ArtifactPublisherPrincipalId) {
+        throw 'Sign into Azure CLI as the artifact publisher, or supply ArtifactPublisherPrincipalId.'
+    }
 }
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $stateRoot = Join-Path $repoRoot ".azure\$ResourceGroup"
@@ -61,6 +68,7 @@ try {
             vmSize = @{ value = $VmSize }
             adminUsername = @{ value = $credential.UserName }
             adminPassword = @{ value = $credential.GetNetworkCredential().Password }
+            artifactPublisherPrincipalId = @{ value = $ArtifactPublisherPrincipalId }
         }
     }
     $parameters | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $parameterPath -Encoding UTF8

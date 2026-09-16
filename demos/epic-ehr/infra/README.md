@@ -17,7 +17,9 @@ inbound traffic, including SQL 1433, API 8000, and browser CDP 9222. A NAT gatew
 provides explicit outbound access for dependencies, model requests, and devtunnel.
 Its public IP is **not** a VM inbound endpoint.
 An LRS storage account holds private, commit-versioned source archives. Public
-blob access is disabled; publishing uses a one-hour, read-only, single-blob SAS
+blob access and Shared Key authentication are disabled. The signed-in publisher
+gets Storage Blob Data Contributor scoped only to this account. Publishing uses
+Entra authentication and a one-hour, read-only, single-blob user-delegation SAS
 delivered as a protected Run Command parameter, not a command-line secret.
 
 ## Deploy and prepare
@@ -25,6 +27,8 @@ delivered as a protected Run Command parameter, not a command-line secret.
 Run these commands from the repository root on Windows after `az login`.
 Check current SKU/image availability, quota, permissions, and cost in your
 subscription before creating resources.
+Deployment also requires permission to create the scoped artifact-publisher
+role assignment (for example Owner or User Access Administrator).
 
 ```powershell
 $subscription = '<your-subscription-id>'
