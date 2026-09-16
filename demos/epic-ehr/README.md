@@ -227,9 +227,17 @@ the API `Authorization` header separately. Treat both tokens as secrets.
 Never send patient data in URL parameters.
 
 ```powershell
-# Run locally; do not save or publish the printed token.
+# Run in the VM's hosting account; never publish or save the token in plaintext.
+devtunnel list
 devtunnel token <tunnel-id> --scopes connect
 ```
+
+Run these commands in the VM under the Windows account and devtunnel sign-in
+that started the host. Use the management **Tunnel ID** returned by
+`devtunnel list`, including its region suffix. Do not derive it from the
+forwarding URL: the URL's hostname prefix and the management ID can differ.
+Paste the raw connect token into the tester's separate tunnel-token field;
+the VM API bearer remains required in its own field.
 
 See [Microsoft's dev tunnel security guidance](https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/security).
 
