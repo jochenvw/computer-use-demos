@@ -114,7 +114,7 @@ class ComputerUseTests(unittest.TestCase):
         self.client = FakeClient(calls)
         return ComputerUseEpicAdapter(
             config or settings(), client_factory=self.client.factory,
-            browser_factory=lambda _: self.browser,
+            browser_factory=lambda _: self.browser, require_runtime_token=False,
         )
 
     def test_cli_skill_uses_screenshots_and_scoped_sdk_session(self):
@@ -254,7 +254,9 @@ class LocalFileSkillTests(unittest.TestCase):
             })
 
         client = FakeClient(script)
-        runner = CopilotSkillRunner(settings(), client_factory=client.factory)
+        runner = CopilotSkillRunner(
+            settings(), client_factory=client.factory, require_runtime_token=False,
+        )
         catalog = FileCatalog((settings().fixture_root / "files",))
         bundle = runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], catalog)
         self.assertEqual("Synthetic sinus rhythm", bundle.resources[0].data["conclusion"])
@@ -269,7 +271,9 @@ class LocalFileSkillTests(unittest.TestCase):
 
     def test_arbitrary_file_path_is_not_an_accepted_handle(self):
         client = FakeClient([("open_patient_file", {"file_id": "..\\OTHER\\record.xml"})])
-        runner = CopilotSkillRunner(settings(), client_factory=client.factory)
+        runner = CopilotSkillRunner(
+            settings(), client_factory=client.factory, require_runtime_token=False,
+        )
         with self.assertRaises(ValueError):
             runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()))
 
@@ -282,7 +286,9 @@ class LocalFileSkillTests(unittest.TestCase):
                 }],
             }),
         ])
-        runner = CopilotSkillRunner(settings(), client_factory=client.factory)
+        runner = CopilotSkillRunner(
+            settings(), client_factory=client.factory, require_runtime_token=False,
+        )
         with self.assertRaises(ValueError):
             runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()))
 

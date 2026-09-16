@@ -13,9 +13,11 @@ class ComputerUseEpicAdapter:
         self, settings: Settings, *,
         client_factory: Callable | None = None,
         browser_factory: Callable = BrowserSession,
+        require_runtime_token: bool = True,
     ) -> None:
         self.runner = CopilotSkillRunner(
             settings, client_factory=client_factory, browser_factory=browser_factory,
+            require_runtime_token=require_runtime_token,
         )
 
     def retrieve(

@@ -107,7 +107,7 @@ class CopilotSkillRunner:
     def __init__(
         self, settings: Settings, *, client_factory: Callable | None = None,
         browser_factory: Callable = BrowserSession,
-        require_runtime_token: bool | None = None,
+        require_runtime_token: bool = True,
     ) -> None:
         settings.validate()
         if not settings.computer_use_enabled:
@@ -115,10 +115,7 @@ class CopilotSkillRunner:
         self.settings = settings
         self._client_factory = client_factory or CopilotClient
         self._browser_factory = browser_factory
-        self._require_runtime_token = (
-            client_factory is None if require_runtime_token is None
-            else require_runtime_token
-        )
+        self._require_runtime_token = require_runtime_token
 
     def retrieve(
         self, skill: Literal["epic-browser", "local-files"], patient_id: str,

@@ -32,6 +32,7 @@ class RetrievalCache:
         self.max_bytes = max_bytes
         self._clock = clock
         self._entries: OrderedDict[tuple, CacheEntry] = OrderedDict()
+        self._total_bytes = 0
 
     @staticmethod
     def key(request: RetrievalRequest, caller: str, backend: str) -> tuple:
@@ -42,7 +43,7 @@ class RetrievalCache:
         )
 
     def invalidate(self, key: tuple) -> None:
-        self._entries.pop(key, None)
+        self._drop(key)
 
     def get(self, key: tuple) -> CacheEntry | None:
         self._expire()
@@ -53,9 +54,15 @@ class RetrievalCache:
         return None
 
     def _expire(self) -> None:
+        now = self._clock()
         for key, entry in list(self._entries.items()):
-            if entry.deadline <= self._clock():
-                del self._entries[key]
+            if entry.deadline <= now:
+                self._drop(key)
+
+    def _drop(self, key: tuple) -> None:
+        entry = self._entries.pop(key, None)
+        if entry is not None:
+            self._total_bytes -= entry.size
 
     @staticmethod
     def _copy(entry: CacheEntry) -> CacheEntry:
@@ -79,9 +86,10 @@ class RetrievalCache:
         )
         if size <= self.max_bytes:
             self._entries[key] = entry
-            while (len(self._entries) > self.max_entries
-                   or sum(item.size for item in self._entries.values()) > self.max_bytes):
-                self._entries.popitem(last=False)
+            self._total_bytes += size
+            while len(self._entries) > self.max_entries or self._total_bytes > self.max_bytes:
+                _, removed = self._entries.popitem(last=False)
+                self._total_bytes -= removed.size
         else:
             # This response is valid, but is not eligible for reuse.
             entry.expires_at = now
