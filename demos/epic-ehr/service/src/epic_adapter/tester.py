@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -24,6 +25,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def upstream_origin(value: str, allow_loopback: bool = False) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Tunnel URL must be text.")
     parsed = urlsplit(value)
     if parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
         raise ValueError("Tunnel URL must be an HTTPS origin without a path, query, or credentials.")
@@ -40,6 +43,8 @@ def upstream_origin(value: str, allow_loopback: bool = False) -> str:
 
 
 def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: str = "fhir") -> str:
+    if not all(isinstance(value, str) for value in (kind, job_id, file_id, output_format)):
+        raise ValueError("Path fields must be text.")
     if kind == "jobs":
         return "/v1/retrieval-jobs"
     if not HEX32.fullmatch(job_id):
@@ -74,8 +79,10 @@ def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, bod
         data = exc.read(MAX_RESPONSE_BYTES + 1)
         if len(data) > MAX_RESPONSE_BYTES:
             raise ValueError("Upstream response exceeded the 2 MiB relay limit.") from exc
+        if 300 <= exc.code < 400:
+            raise ValueError("Tunnel redirected the request. Check tunnel login or connect token.") from exc
         return exc.code, dict(exc.headers), data
-    except URLError as exc:
+    except (URLError, TimeoutError, socket.timeout) as exc:
         raise ValueError("Cannot reach the tunnel. Check tunnel login, connect token, and URL.") from exc
 
 
@@ -133,16 +140,25 @@ def make_handler(csrf: str, allow_loopback: bool):
                     data = json.loads(self.rfile.read(length))
                 except json.JSONDecodeError as exc:
                     raise ValueError("Request body must be valid JSON.") from exc
+                if not isinstance(data, dict):
+                    raise ValueError("Request body must be a JSON object.")
                 origin = upstream_origin(data["tunnel_url"], allow_loopback)
                 bearer, tunnel = data["bearer_token"], data.get("tunnel_token", "")
                 if not isinstance(bearer, str) or not bearer:
                     raise ValueError("API bearer token is required.")
                 if not isinstance(tunnel, str):
                     raise ValueError("Tunnel connect token must be text.")
+                if "\r" in bearer or "\n" in bearer:
+                    raise ValueError("API bearer token contains invalid characters.")
+                if "\r" in tunnel or "\n" in tunnel:
+                    raise ValueError("Tunnel connect token contains invalid characters.")
                 kind = self.path.rsplit("/", 1)[-1]
                 payload = None
                 if kind == "jobs":
-                    payload = json.dumps(data["request"], separators=(",", ":")).encode()
+                    request_body = data.get("request")
+                    if not isinstance(request_body, dict):
+                        raise ValueError("Retrieval request must be a JSON object.")
+                    payload = json.dumps(request_body, separators=(",", ":")).encode()
                 path = fixed_path(kind, data.get("job_id", ""), data.get("file_id", ""), data.get("format", "fhir"))
                 status, headers, response = request_upstream(origin, path, bearer, tunnel, payload)
                 if kind == "file" and 200 <= status < 300:

@@ -1,5 +1,6 @@
 from pathlib import Path
 import threading
+import json
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
@@ -49,8 +50,8 @@ class TesterTests(unittest.TestCase):
         thread.start()
         origin = f"http://127.0.0.1:{server.server_port}"
         try:
-            status, _, _ = request_upstream(origin, "/redirect", "token", "", None)
-            self.assertEqual(302, status)
+            with self.assertRaisesRegex(ValueError, "redirected"):
+                request_upstream(origin, "/redirect", "token", "", None)
             self.assertEqual("Bearer" + " token", auth[0])
             with self.assertRaisesRegex(ValueError, "2 MiB"):
                 request_upstream(origin, "/large", "token", "", None)
@@ -78,6 +79,70 @@ class TesterTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as error:
                 urlopen(request)
             self.assertEqual(403, error.exception.code)
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
+    def test_relay_downloads_exact_bytes_and_returns_errors_as_json(self):
+        requested = []
+        class Upstream(BaseHTTPRequestHandler):
+            def do_GET(self):
+                requested.append(self.path)
+                if self.path.endswith("/" + "b" * 32):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.end_headers()
+                    self.wfile.write(b"\x00download-bytes")
+                else:
+                    self.send_response(401)
+                    self.end_headers()
+                    self.wfile.write(b"denied")
+
+            def log_message(self, *args):
+                pass
+
+        upstream = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
+        relay = ThreadingHTTPServer(("127.0.0.1", 0), make_handler("csrf", True))
+        threads = [threading.Thread(target=x.serve_forever, daemon=True) for x in (upstream, relay)]
+        for thread in threads:
+            thread.start()
+        body = {"tunnel_url": f"http://127.0.0.1:{upstream.server_port}", "bearer_token": "test", "job_id": "a" * 32, "file_id": "b" * 32}
+        try:
+            request = Request(
+                f"http://127.0.0.1:{relay.server_port}/api/file", data=json.dumps(body).encode(),
+                headers={"Content-Type": "application/json", "X-CSRF-Token": "csrf"}, method="POST",
+            )
+            with urlopen(request) as response:
+                self.assertEqual(b"\x00download-bytes", response.read())
+            self.assertEqual([f"/v1/retrieval-jobs/{'a' * 32}/files/{'b' * 32}"], requested)
+            body["file_id"] = "invalid"
+            request = Request(
+                f"http://127.0.0.1:{relay.server_port}/api/file", data=json.dumps(body).encode(),
+                headers={"Content-Type": "application/json", "X-CSRF-Token": "csrf"}, method="POST",
+            )
+            with self.assertRaises(HTTPError) as error:
+                urlopen(request)
+            self.assertEqual("Invalid file identifier.", json.load(error.exception)["error"])
+        finally:
+            for server, thread in zip((upstream, relay), threads):
+                server.shutdown()
+                thread.join()
+                server.server_close()
+
+    def test_relay_rejects_non_object_and_credential_newlines(self):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler("csrf", True))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for body, expected in (([], "Request body must be a JSON object."), ({"tunnel_url": "http://127.0.0.1:1", "bearer_token": "bad\nvalue"}, "API bearer token contains invalid characters.")):
+                request = Request(
+                    f"http://127.0.0.1:{server.server_port}/api/jobs", data=json.dumps(body).encode(),
+                    headers={"Content-Type": "application/json", "X-CSRF-Token": "csrf"}, method="POST",
+                )
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(request)
+                self.assertEqual(expected, json.load(error.exception)["error"])
         finally:
             server.shutdown()
             thread.join()
