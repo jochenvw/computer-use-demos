@@ -34,6 +34,25 @@
   ],
   "observations": [
     {
+      "id": "blood-pressure-demo-1",
+      "status": "final",
+      "code": {
+        "coding": [{"system": "http://loinc.org", "code": "85354-9", "display": "Blood pressure panel"}]
+      },
+      "subject": {"reference": "Patient/DEMO-100042"},
+      "effectiveDateTime": "2026-09-10T09:10:00Z",
+      "component": [
+        {
+          "code": {"coding": [{"system": "http://loinc.org", "code": "8480-6", "display": "Systolic blood pressure"}]},
+          "valueQuantity": {"value": 120, "unit": "mmHg", "system": "http://unitsofmeasure.org", "code": "mm[Hg]"}
+        },
+        {
+          "code": {"coding": [{"system": "http://loinc.org", "code": "8462-4", "display": "Diastolic blood pressure"}]},
+          "valueQuantity": {"value": 80, "unit": "mmHg", "system": "http://unitsofmeasure.org", "code": "mm[Hg]"}
+        }
+      ]
+    },
+    {
       "id": "observation-demo-1",
       "status": "final",
       "code": {
@@ -68,7 +87,7 @@
         "reference": "Patient/DEMO-100042"
       },
       "effectiveDateTime": "2026-09-10T09:15:00Z",
-      "valueString": "Synthetic sinus rhythm; training data only"
+      "conclusion": "Synthetic sinus rhythm; training data only"
     }
   ]
 }
