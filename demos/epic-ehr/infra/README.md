@@ -16,19 +16,17 @@ Bastion native tunneling is enabled explicitly. The VM subnet denies other
 inbound traffic, including SQL 1433, API 8000, and browser CDP 9222. A NAT gateway
 provides explicit outbound access for dependencies, model requests, and devtunnel.
 Its public IP is **not** a VM inbound endpoint.
-An LRS storage account holds private, commit-versioned source archives. Public
-blob access and Shared Key authentication are disabled. The signed-in publisher
-gets Storage Blob Data Contributor scoped only to this account. Publishing uses
-Entra authentication and a one-hour, read-only, single-blob user-delegation SAS
-delivered as a protected Run Command parameter, not a command-line secret.
+Small source archives are delivered through the authenticated Azure VM agent
+channel as protected 12 KiB parts, then reassembled and hash-verified on the VM.
+This needs no storage public endpoint, SAS, account key, or extra data-plane role,
+and stays below Windows command-line limits. The demo publisher caps archives
+at 12 MiB; use an approved private artifact pipeline for larger applications.
 
 ## Deploy and prepare
 
 Run these commands from the repository root on Windows after `az login`.
 Check current SKU/image availability, quota, permissions, and cost in your
 subscription before creating resources.
-Deployment also requires permission to create the scoped artifact-publisher
-role assignment (for example Owner or User Access Administrator).
 
 ```powershell
 $subscription = '<your-subscription-id>'
@@ -66,7 +64,7 @@ Install signed Microsoft tools and the checksum-verified pinned `uv` release:
 
 The SQL setup uses the verified Windows administrator identity for SQL Windows
 authentication rather than Run Command's SYSTEM identity. Credentials and the
-short-lived archive URL travel as encrypted/protected Run Command parameters. Setup
+source parts travel as encrypted/protected Run Command parameters. Setup
 creates only the `EpicDemo` synthetic database/tables if absent; it does not
 replace existing data. SQL memory is capped at 8 GiB to leave room for Edge,
 SSMS and the agent.
@@ -164,7 +162,7 @@ demo; the VM administrator is intentionally privileged for initial setup.
 
 ## Cost and lifecycle
 
-The VM, disk, Bastion Standard, NAT gateway, public IPs, artifact storage and traffic are billable.
+The VM, disk, Bastion Standard, NAT gateway, public IPs and traffic are billable.
 **Stopping/deallocating the VM does not stop Bastion/NAT/disk billing.**
 Review current regional prices and subscription discounts. Remove the dedicated
 demo resource group when the environment is no longer needed, after preserving

@@ -15,9 +15,6 @@ param imageOffer string = 'sql2022-ws2022'
 param imageSku string = 'sqldev-gen2'
 param imageVersion string = '16.0.260610'
 
-@description('Object ID of the signed-in user who publishes private release artifacts.')
-param artifactPublisherPrincipalId string = ''
-
 @description('Windows administrator user used only through Azure Bastion.')
 param adminUsername string
 
@@ -34,44 +31,6 @@ param vmSize string = 'Standard_D4as_v5'
 var vnetName = '${prefix}-vnet'
 var workloadSubnetName = 'desktop'
 var bastionSubnetName = 'AzureBastionSubnet'
-
-resource artifacts 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: '${take(prefix, 8)}${uniqueString(resourceGroup().id)}'
-  location: location
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
-  }
-  properties: {
-    allowBlobPublicAccess: false
-    allowSharedKeyAccess: false
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-  }
-}
-
-resource artifactPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(artifactPublisherPrincipalId)) {
-  name: guid(artifacts.id, artifactPublisherPrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-  scope: artifacts
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-    principalId: artifactPublisherPrincipalId
-    principalType: 'User'
-  }
-}
-
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
-  parent: artifacts
-  name: 'default'
-}
-
-resource releases 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
-  parent: blobService
-  name: 'releases'
-  properties: {
-    publicAccess: 'None'
-  }
-}
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: '${prefix}-desktop-nsg'
@@ -301,4 +260,3 @@ output vmPrivateIp string = nic.properties.ipConfigurations[0].properties.privat
 output bastionName string = bastion.name
 output vmResourceId string = vm.id
 output deploymentLocation string = location
-output artifactStorageName string = artifacts.name

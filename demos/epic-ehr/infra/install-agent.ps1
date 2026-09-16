@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$ArchiveUriBase64,
+    [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{32}$')][string]$TransferId,
+    [Parameter(Mandatory)][ValidateRange(1, 1024)][int]$PartCount,
     [Parameter(Mandatory)][string]$ArchiveSha256,
     [Parameter(Mandatory)][string]$SourceCommit,
     [string]$AdminUser = 'demoadmin'
@@ -12,30 +13,35 @@ $service = Join-Path $root 'service'
 $uv = 'C:\DemoTools\uv\uv.exe'
 if (-not (Test-Path -LiteralPath $uv)) { throw 'Run bootstrap-tools.ps1 first.' }
 if ($SourceCommit -notmatch '^[a-f0-9]{40}$') { throw 'A full source commit ID is required.' }
-$uriText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ArchiveUriBase64))
-$uri = $null
-if (-not [Uri]::TryCreate($uriText, [UriKind]::Absolute, [ref]$uri) -or
-    $uri.Scheme -ne 'https' -or $uri.Port -ne 443 -or $uri.UserInfo -or $uri.Fragment -or
-    $uri.Host -notmatch '^[a-z0-9]+\.blob\.core\.windows\.net$' -or
-    $uri.AbsolutePath -ne "/releases/$SourceCommit.zip") {
-    throw 'The deployment archive must be a versioned HTTPS blob in the private release container.'
-}
 New-Item -ItemType Directory -Path $root -Force | Out-Null
+$staging = Join-Path "$root\.staging" $TransferId
+$parts = @(0..($PartCount - 1) | ForEach-Object { Join-Path $staging ('{0:D4}.part' -f $_) })
+$deadline = [DateTime]::UtcNow.AddMinutes(5)
+do {
+    $missing = @($parts | Where-Object { -not (Test-Path -LiteralPath $_) })
+    if ($missing.Count -eq 0) { break }
+    Start-Sleep -Seconds 2
+} while ([DateTime]::UtcNow -lt $deadline)
+if ($missing.Count) { throw 'Source transfer did not complete. Inspect the managed source-part commands.' }
 $archive = Join-Path $root 'source-install.zip'
 try {
+    $stream = [IO.File]::Create($archive)
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri $uri.AbsoluteUri -OutFile $archive -MaximumRedirection 0
-    } catch {
-        throw 'Private release download failed. Check the protected read token and storage connectivity.'
+        foreach ($part in $parts) {
+            $bytes = [IO.File]::ReadAllBytes($part)
+            $stream.Write($bytes, 0, $bytes.Length)
+        }
+    } finally {
+        $stream.Dispose()
     }
     if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $ArchiveSha256) {
         throw 'Source archive integrity check failed.'
     }
     Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
 } finally {
-    $uriText = $null
-    $ArchiveUriBase64 = $null
     if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive }
+    foreach ($part in $parts) { if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part } }
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging }
 }
 $env:UV_PYTHON_INSTALL_DIR = 'C:\DemoTools\python'
 $env:Path = 'C:\DemoTools\uv;C:\DemoTools\devtunnel;' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
