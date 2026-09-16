@@ -1,10 +1,12 @@
 import inspect
 import json
+import os
 import tempfile
 import threading
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from copilot import CopilotClient, ToolInvocation, ToolSet
 
@@ -220,6 +222,17 @@ class ComputerUseTests(unittest.TestCase):
     def test_live_opt_in_required(self):
         with self.assertRaises(RuntimeError):
             replace(settings(), computer_use_enabled=False).validate()
+
+    def test_runtime_token_requirement_is_explicit_for_injected_factories(self):
+        client = FakeClient([])
+        runner = CopilotSkillRunner(
+            settings(), client_factory=client.factory, require_runtime_token=True,
+        )
+        with patch.dict(os.environ, {"COPILOT_GITHUB_TOKEN": ""}):
+            with self.assertRaisesRegex(RuntimeError, "COPILOT_GITHUB_TOKEN"):
+                runner.retrieve(
+                    "local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()),
+                )
 
 
 class LocalFileSkillTests(unittest.TestCase):

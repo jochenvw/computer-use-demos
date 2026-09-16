@@ -68,7 +68,7 @@ class Settings:
 
     def validate(self) -> None:
         if self.backend not in {"fixture", "copilot", "computer-use"}:
-            raise RuntimeError("EPIC_BACKEND must be fixture or copilot.")
+            raise RuntimeError("EPIC_BACKEND must be fixture, copilot, or computer-use.")
         if min(self.cache_ttl_seconds, self.cache_max_entries, self.cache_max_bytes) <= 0:
             raise RuntimeError("Cache limits must be positive.")
         if not 1 <= self.skill_timeout_seconds <= 600:

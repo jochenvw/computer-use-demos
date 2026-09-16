@@ -210,7 +210,7 @@ class FhirFormatTests(unittest.TestCase):
         self.assertEqual(["contentType", "url", "size", "title"], [node.tag.split("}")[1] for node in download])
         self.assertEqual("application/pdf", download.find("f:contentType", NS).get("value"))
         self.assertEqual("42", download.find("f:size", NS).get("value"))
-        self.assertEqual(BASE_URL + "?x=1&y=2/files/ecg-file", download.find("f:url", NS).get("value"))
+        self.assertEqual(BASE_URL + "/files/ecg-file?x=1&y=2", download.find("f:url", NS).get("value"))
         self.assertEqual("ECG & report.pdf", download.find("f:title", NS).get("value"))
         self.assertNotIn("private", xml)
         self.assertNotIn("path", xml)

@@ -107,6 +107,7 @@ class CopilotSkillRunner:
     def __init__(
         self, settings: Settings, *, client_factory: Callable | None = None,
         browser_factory: Callable = BrowserSession,
+        require_runtime_token: bool | None = None,
     ) -> None:
         settings.validate()
         if not settings.computer_use_enabled:
@@ -114,6 +115,10 @@ class CopilotSkillRunner:
         self.settings = settings
         self._client_factory = client_factory or CopilotClient
         self._browser_factory = browser_factory
+        self._require_runtime_token = (
+            client_factory is None if require_runtime_token is None
+            else require_runtime_token
+        )
 
     def retrieve(
         self, skill: Literal["epic-browser", "local-files"], patient_id: str,
@@ -275,7 +280,7 @@ class CopilotSkillRunner:
                     "base_url": endpoint if endpoint.endswith("/openai/v1") else endpoint + "/openai/v1",
                     "bearer_token": access.token,
                 }
-            elif not token and self._client_factory is CopilotClient:
+            elif not token and self._require_runtime_token:
                 raise RuntimeError("Set COPILOT_GITHUB_TOKEN for the isolated Copilot runtime.")
             try:
                 async with self._client_factory(

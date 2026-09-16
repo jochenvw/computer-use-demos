@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
+from urllib.parse import quote, urlsplit, urlunsplit
 from uuid import uuid4
 from xml.etree import ElementTree as ET
 
@@ -21,7 +22,7 @@ def normalized_json(bundle: ClinicalBundle, base_url: str) -> dict[str, Any]:
         "files": [
             {
                 **file.model_dump(mode="json"),
-                "url": f"{base_url}/files/{file.file_id}",
+                "url": _file_url(base_url, file.file_id),
             }
             for file in bundle.files
         ],
@@ -56,7 +57,7 @@ def fhir_bundle(bundle: ClinicalBundle, base_url: str) -> dict[str, Any]:
                 "content": [{
                     "attachment": {
                         "contentType": file.media_type,
-                        "url": f"{base_url}/files/{file.file_id}",
+                        "url": _file_url(base_url, file.file_id),
                         "title": file.name,
                         "size": file.size_bytes,
                     }
@@ -70,6 +71,12 @@ def fhir_bundle(bundle: ClinicalBundle, base_url: str) -> dict[str, Any]:
         "type": "collection",
         "entry": entries,
     }
+
+
+def _file_url(base_url: str, file_id: str) -> str:
+    parsed = urlsplit(base_url)
+    path = parsed.path.rstrip("/") + f"/files/{quote(file_id, safe='')}"
+    return urlunsplit((parsed.scheme, parsed.netloc, path, parsed.query, parsed.fragment))
 
 
 # Ordered FHIR R4 subset. Unknown elements fail rather than becoming invalid XML.
