@@ -22,7 +22,7 @@ not an Epic Systems or humanitarian organization product.
 
 ```powershell
 cd .\demos\epic-ehr\service
-uv sync --extra test
+uv sync --locked --extra test --default-index https://pypi.org/simple
 Copy-Item .env.example .env
 ```
 
@@ -92,7 +92,7 @@ Browser lifecycle and actions run on one dedicated thread.
 Provision the SDK-matched runtime before an offline demonstration:
 
 ```powershell
-uv run python -m copilot download-runtime
+uv run --frozen python -m copilot download-runtime
 ```
 
 Set the Copilot model name in `MODEL_DEPLOYMENT`; `gpt-6-astra` is the requested
@@ -225,7 +225,7 @@ On the local machine, install the demo package, then run:
 
 ```powershell
 cd .\demos\epic-ehr\service
-uv sync --extra test
+uv sync --locked --extra test --default-index https://pypi.org/simple
 .\testing.ps1
 ```
 
@@ -268,9 +268,28 @@ fabricated clinical message. This is not a full hospital interface profile.
 ## Verify
 
 ```powershell
-uv run python -m unittest discover tests -v
-uv run epic-agent --banner-only
+uv run --frozen --extra test python -m unittest discover tests -v
+uv run --frozen epic-agent --banner-only
 ```
 
 Unit/API tests use fixtures and mocked model calls; they do not contact Epic or
 Azure. Infrastructure template and image preparation are in `infra\`.
+
+## Dependency maintenance
+
+Commit `service\uv.lock` together with `service\pyproject.toml` so installations
+use the reviewed dependency set. The lock uses public PyPI artifact URLs and
+SHA-256 hashes, not machine-specific package-feed URLs. From `service\`, refresh
+compatible stable releases and verify them before committing. The launchers use
+`--frozen` so starting either UI does not rewrite the lock:
+
+```powershell
+uv lock --upgrade --default-index https://pypi.org/simple
+uv sync --locked --extra test --default-index https://pypi.org/simple
+uv run --frozen --extra test python -m unittest discover tests -v
+```
+
+The Copilot SDK is deliberately pinned because its matched CLI runtime and
+session isolation APIs are part of the demo's behavior. Upgrade that pin
+explicitly, provision the matching runtime, and verify the guarded skill
+sessions rather than assuming `uv lock --upgrade` changes it.

@@ -45,7 +45,7 @@ try {
 }
 $env:UV_PYTHON_INSTALL_DIR = 'C:\DemoTools\python'
 $env:Path = 'C:\DemoTools\uv;C:\DemoTools\devtunnel;' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
-& $uv sync --project $service --python 3.13 --extra test --default-index 'https://pypi.org/simple' --quiet
+& $uv sync --project $service --python 3.13 --locked --extra test --default-index 'https://pypi.org/simple' --quiet
 if ($LASTEXITCODE -ne 0) { throw 'Agent dependency installation failed.' }
 $python = Join-Path $service '.venv\Scripts\python.exe'
 $sdkVersion = & $python -c "from importlib.metadata import version; print(version('github-copilot-sdk'))"

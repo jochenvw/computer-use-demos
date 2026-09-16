@@ -83,7 +83,7 @@
    download links with hash recheck.
 
 8. For separately authorized live training only, provision the SDK runtime with
-   `uv run python -m copilot download-runtime`, launch `browser.ps1`, log in
+   `uv run --frozen python -m copilot download-runtime`, launch `browser.ps1`, log in
    manually using a read-only account, set `EPIC_BACKEND=copilot`,
    `EPIC_COMPUTER_USE_ENABLED=1`, exact `EPIC_ORIGIN`, loopback
    `EPIC_BROWSER_CDP_URL`, and `MODEL_DEPLOYMENT`. Use `COPILOT_GITHUB_TOKEN` in
