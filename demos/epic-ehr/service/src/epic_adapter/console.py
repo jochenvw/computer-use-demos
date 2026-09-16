@@ -5,6 +5,7 @@ import logging
 import queue
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -80,10 +81,30 @@ def main() -> None:
     )
 
 
+def ensure_port_available(port: int) -> None:
+    try:
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", port))
+    except OSError as exc:
+        raise RuntimeError(f"Port {port} is already in use; refusing to adopt another API.") from exc
+
+
+def stop_child(child) -> None:
+    if child is None or child.poll() is not None:
+        return
+    child.terminate()
+    try:
+        child.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+
+
 def run_with_tunnel(console: Console, port: int) -> None:
     """Own both children so a failed tunnel never leaves a public endpoint behind."""
     if not shutil.which("devtunnel"):
         raise RuntimeError("Install the Microsoft dev tunnels CLI and run 'devtunnel user login' first.")
+    ensure_port_available(port)
     api = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "epic_adapter.api:app", "--host", "127.0.0.1", "--port", str(port)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -108,15 +129,22 @@ def run_with_tunnel(console: Console, port: int) -> None:
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         console.print("Opening authenticated dev tunnel; waiting for the actual HTTPS URL.")
-        lines: queue.Queue[str | None] = queue.Queue()
+        lines: queue.Queue[str | None] = queue.Queue(maxsize=64)
         def copy_output():
             for output in iter(tunnel.stdout.readline, ""):
-                lines.put(output)
-            lines.put(None)
+                try:
+                    lines.put(output, timeout=.2)
+                except queue.Full:
+                    pass
+            try:
+                lines.put(None, timeout=.2)
+            except queue.Full:
+                pass
 
         reader = threading.Thread(target=copy_output, daemon=True)
         reader.start()
         printed_url = False
+        tunnel_deadline = time.monotonic() + 30
         while True:
             try:
                 line = lines.get(timeout=.2)
@@ -124,6 +152,8 @@ def run_with_tunnel(console: Console, port: int) -> None:
                 line = ""
             if line is None:
                 raise RuntimeError("Dev tunnel exited. Check devtunnel user login and network access.")
+            if time.monotonic() >= tunnel_deadline and not printed_url:
+                raise RuntimeError("Timed out waiting for devtunnel HTTPS URL. Check devtunnel user login and host access.")
             match = re.search(r"https://[a-z0-9.-]+\.devtunnels\.ms(?::443)?", line, re.I)
             if match and not printed_url:
                 console.print(Panel(match.group(0), title="Tunnel HTTPS URL (copy this)", border_style="green"))
@@ -133,14 +163,14 @@ def run_with_tunnel(console: Console, port: int) -> None:
             if tunnel.poll() is not None:
                 raise RuntimeError("Dev tunnel exited. Check devtunnel user login and network access.")
     finally:
+        cleanup_errors = []
         for child in (tunnel, api):
-            if child and child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait()
+            try:
+                stop_child(child)
+            except Exception as exc:
+                cleanup_errors.append(exc)
+        if cleanup_errors and sys.exc_info()[0] is None:
+            raise cleanup_errors[0]
 
 
 if __name__ == "__main__":
