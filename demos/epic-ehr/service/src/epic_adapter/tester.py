@@ -94,6 +94,10 @@ def make_handler(csrf: str, allow_loopback: bool):
     class Handler(BaseHTTPRequestHandler):
         server_version = "EpicTester"
 
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(15)
+
         def log_message(self, format, *args):
             pass
 
@@ -134,6 +138,8 @@ def make_handler(csrf: str, allow_loopback: bool):
                     raise ValueError("Invalid Content-Length header.") from exc
                 if length < 0:
                     raise ValueError("Invalid Content-Length header.")
+                if length == 0:
+                    raise ValueError("Request body is required.")
                 if length > 16384:
                     raise ValueError("Request is too large.")
                 try:
@@ -179,6 +185,8 @@ def make_handler(csrf: str, allow_loopback: bool):
                 self._send(400, b'{"error":"Request fields have invalid types."}')
             except ValueError as exc:
                 self._send(400, json.dumps({"error": str(exc)}).encode())
+            except (OSError, socket.timeout):
+                self._send(408, b'{"error":"Request body timed out."}')
 
     return Handler
 

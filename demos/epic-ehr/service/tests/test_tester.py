@@ -147,3 +147,20 @@ class TesterTests(unittest.TestCase):
             server.shutdown()
             thread.join()
             server.server_close()
+
+    def test_relay_rejects_empty_request_body(self):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler("csrf", True))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/api/jobs", data=b"",
+                headers={"Content-Type": "application/json", "X-CSRF-Token": "csrf"}, method="POST",
+            )
+            with self.assertRaises(HTTPError) as error:
+                urlopen(request)
+            self.assertEqual("Request body is required.", json.load(error.exception)["error"])
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
