@@ -101,6 +101,34 @@ for the isolated runtime. Alternatively, configure `AZURE_AI_FOUNDRY_ENDPOINT`
 and use Entra ID (`DefaultAzureCredential`) for Azure BYOM; then
 `MODEL_DEPLOYMENT` is your deployment name. API-key authentication is not used.
 
+The repository's configured Foundry target is account
+`nl-stu-jvw-ai-saoyr2` in `nl-stu-jvw-foundry-rg`, Sweden Central. For the
+medical agent's Azure BYOM mode, set these values in the local environment or
+the VM's **Configure Epic Agent** file:
+
+```text
+AZURE_AI_FOUNDRY_ENDPOINT=https://nl-stu-jvw-ai-saoyr2.openai.azure.com
+MODEL_DEPLOYMENT=nl-stu-jvw-gpt-6-astra
+```
+
+The deployment serves `gpt-6-astra` version `2026-09-03`. Its SKU is
+**GlobalStandard**: the resource's Sweden location does not guarantee that
+inference stays in Sweden. Use only synthetic data in this demo.
+
+These two values, plus `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`,
+`AZURE_AI_RESOURCE_GROUP`, `AZURE_AI_ACCOUNT_NAME`, and `AZURE_AI_LOCATION`,
+are saved as GitHub repository **variables**, not secrets. Variables do not
+authenticate a process or automatically update local/VM configuration.
+The account disables API-key authentication; use an authorized Entra identity
+through `DefaultAzureCredential`. A VM identity needs inference permission on
+this account; GitHub Actions should use an explicitly configured OIDC identity,
+not a copied Azure account key. Neither identity is provisioned by saving variables.
+
+This Astra selection applies to the medical agent's Copilot host-tool skills.
+It does not establish compatibility with the plant agent's native
+`computer_use_preview` tool, and no such model deployment was found in this
+account. Keep that agent's model selection separate.
+
 1. On the VM, open a **dedicated** browser profile:
 
    ```powershell
