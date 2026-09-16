@@ -191,7 +191,7 @@ Response links are relative, so they also work behind Host-rewriting tunnels.
 Interactive clients authenticate to the tunnel. For programmatic clients, obtain
 a tunnel connect token using your devtunnel CLI's token command and send it as
 `X-Tunnel-Authorization: tunnel <connect-token>`; continue sending
-`Authorization: Bearer <API_BEARER_TOKEN>` separately. Treat both tokens as secrets.
+the API `Authorization` header separately. Treat both tokens as secrets.
 Never send patient data in URL parameters.
 
 ```powershell

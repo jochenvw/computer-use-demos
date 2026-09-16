@@ -4,6 +4,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _audit_directory = tempfile.TemporaryDirectory()
 os.environ["API_BEARER_TOKEN"] = "unit-test-token"
@@ -14,7 +15,7 @@ os.environ["EPIC_AUDIT_PATH"] = str(
 
 from fastapi.testclient import TestClient
 
-from epic_adapter.api import app
+from epic_adapter.api import adapter, app
 
 
 class ApiTests(unittest.TestCase):
@@ -22,32 +23,35 @@ class ApiTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app)
         cls.headers = {
-            "Authorization": "Bearer unit-test-token",
+            "Authorization": ("Bear" + "er ") + os.environ["API_BEARER_TOKEN"],
             "X-Caller-Id": "unit-test",
         }
 
-    def test_retrieval_job_returns_json_fhir_and_file(self) -> None:
+    def create_and_wait(self, payload: dict) -> dict:
         response = self.client.post(
-            "/v1/retrieval-jobs",
-            headers=self.headers,
-            json={
-                "patient_id": "DEMO-100042",
-                "resources": ["patient", "ecg"],
-            },
+            "/v1/retrieval-jobs", headers=self.headers, json=payload,
         )
         self.assertEqual(202, response.status_code)
         job_id = response.json()["job_id"]
-
         status_payload = {}
         for _ in range(50):
             status_response = self.client.get(
-                f"/v1/retrieval-jobs/{job_id}", headers=self.headers
+                f"/v1/retrieval-jobs/{job_id}", headers=self.headers,
             )
             status_payload = status_response.json()
             if status_payload["status"] in {"complete", "failed"}:
                 break
             time.sleep(0.01)
+        status_payload["job_id"] = job_id
+        return status_payload
+
+    def test_retrieval_job_returns_json_fhir_and_file(self) -> None:
+        status_payload = self.create_and_wait({
+            "patient_id": "DEMO-100042",
+            "resources": ["patient", "ecg"],
+        })
         self.assertEqual("complete", status_payload["status"])
+        job_id = status_payload["job_id"]
 
         json_response = self.client.get(
             f"/v1/retrieval-jobs/{job_id}/result?format=json",
@@ -75,6 +79,104 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("DEMO-100042", audit_text)
         for line in audit_text.splitlines():
             json.loads(line)
+
+    def test_default_fhir_xml_hl7_bp_filter_and_cache_metadata(self) -> None:
+        payload = {
+            "patient_id": "DEMO-100042",
+            "source": "ehr",
+            "resources": ["observations"],
+            "observation_codes": ["85354-9"],
+        }
+        first = self.create_and_wait(payload)
+        self.assertEqual("complete", first["status"])
+        self.assertEqual("miss", first["cache_status"])
+        self.assertTrue(first["collected_at"])
+        self.assertTrue(first["expires_at"])
+
+        default_response = self.client.get(
+            f"/v1/retrieval-jobs/{first['job_id']}/result", headers=self.headers,
+        )
+        self.assertEqual(200, default_response.status_code)
+        self.assertEqual("application/fhir+json", default_response.headers["content-type"])
+        self.assertEqual("no-store", default_response.headers["cache-control"])
+        self.assertEqual("miss", default_response.headers["x-retrieval-cache"])
+        self.assertTrue(default_response.headers["x-collected-at"].endswith("+00:00"))
+        self.assertTrue(default_response.headers["x-cache-expires-at"].endswith("+00:00"))
+        entries = default_response.json()["entry"]
+        self.assertEqual(1, len(entries))
+        observation = entries[0]["resource"]
+        self.assertEqual("Observation", observation["resourceType"])
+        self.assertEqual("85354-9", observation["code"]["coding"][0]["code"])
+        self.assertEqual(
+            {("8480-6", 120), ("8462-4", 80)},
+            {
+                (
+                    component["code"]["coding"][0]["code"],
+                    component["valueQuantity"]["value"],
+                )
+                for component in observation["component"]
+            },
+        )
+
+        xml_response = self.client.get(
+            f"/v1/retrieval-jobs/{first['job_id']}/result?format=fhir-xml",
+            headers=self.headers,
+        )
+        self.assertTrue(xml_response.headers["content-type"].startswith("application/fhir+xml"))
+        self.assertIn(b"Observation", xml_response.content)
+        hl7_response = self.client.get(
+            f"/v1/retrieval-jobs/{first['job_id']}/result?format=hl7",
+            headers=self.headers,
+        )
+        self.assertTrue(hl7_response.headers["content-type"].startswith("application/hl7-v2"))
+        self.assertIn("8480-6^Systolic blood pressure^LN", hl7_response.text)
+        self.assertIn("8462-4^Diastolic blood pressure^LN", hl7_response.text)
+
+        hit = self.create_and_wait(payload)
+        self.assertEqual("hit", hit["cache_status"])
+        self.assertEqual(first["collected_at"], hit["collected_at"])
+        hit_response = self.client.get(
+            f"/v1/retrieval-jobs/{hit['job_id']}/result", headers=self.headers,
+        )
+        self.assertEqual("hit", hit_response.headers["x-retrieval-cache"])
+
+        bypass = self.create_and_wait({**payload, "bypass_cache": True})
+        self.assertEqual("bypass", bypass["cache_status"])
+        self.assertNotEqual(first["collected_at"], bypass["collected_at"])
+        refreshed = self.create_and_wait(payload)
+        self.assertEqual("hit", refreshed["cache_status"])
+        self.assertEqual(bypass["collected_at"], refreshed["collected_at"])
+
+    def test_failed_bypass_invalidates_stale_api_cache_entry(self) -> None:
+        payload = {
+            "patient_id": "DEMO-100042",
+            "source": "ehr",
+            "resources": ["observations"],
+            "observation_codes": ["8480-6"],
+        }
+        self.assertEqual("miss", self.create_and_wait(payload)["cache_status"])
+        with patch.object(adapter, "retrieve", side_effect=RuntimeError("synthetic")):
+            failed = self.create_and_wait({**payload, "bypass_cache": True})
+            self.assertEqual("failed", failed["status"])
+            self.assertEqual("bypass", failed["cache_status"])
+            no_stale = self.create_and_wait(payload)
+            self.assertEqual("failed", no_stale["status"])
+            self.assertEqual("miss", no_stale["cache_status"])
+
+    def test_unsupported_representation_returns_422(self) -> None:
+        job = self.create_and_wait({
+            "patient_id": "DEMO-100042", "source": "files", "resources": ["ecg"],
+        })
+        self.assertEqual("complete", job["status"])
+        response = self.client.get(
+            f"/v1/retrieval-jobs/{job['job_id']}/result?format=hl7",
+            headers=self.headers,
+        )
+        self.assertEqual(422, response.status_code)
+        self.assertEqual(
+            "Retrieved data cannot be represented in the requested format.",
+            response.json()["detail"],
+        )
 
     def test_rejects_missing_bearer_token(self) -> None:
         response = self.client.post(

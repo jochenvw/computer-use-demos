@@ -129,6 +129,18 @@ class ComputerUseTests(unittest.TestCase):
         self.assertFalse(options["enable_session_store"])
         self.assertIsInstance(options["available_tools"], ToolSet)
         self.assertEqual(
+            {
+                "custom:click", "custom:finish", "custom:observe",
+                "custom:press_key", "custom:scroll", "custom:stop",
+                "custom:type_text",
+            },
+            set(options["available_tools"]),
+        )
+        self.assertEqual([], self.client.client_options["builtin_plugin_directories"])
+        self.assertEqual([], options["plugin_directories"])
+        self.assertEqual({}, options["mcp_servers"])
+        self.assertFalse(options["enable_mcp_apps"])
+        self.assertEqual(
             {"finish", "stop", "observe", "click", "type_text", "press_key", "scroll"},
             set(self.client.tools),
         )
@@ -235,6 +247,10 @@ class LocalFileSkillTests(unittest.TestCase):
         self.assertEqual("Synthetic sinus rhythm", bundle.resources[0].data["conclusion"])
         self.assertEqual(1, len(bundle.files))
         self.assertEqual(["local-files"], client.options["custom_agents"][0]["skills"])
+        self.assertEqual(
+            {"custom:finish", "custom:list_patient_files", "custom:open_patient_file", "custom:stop"},
+            set(client.options["available_tools"]),
+        )
         self.assertEqual({"list_patient_files", "open_patient_file", "finish", "stop"}, set(client.tools))
         self.assertNotIn(str(settings().fixture_root), json.dumps(client.prompt))
 

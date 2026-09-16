@@ -280,7 +280,7 @@ class CopilotSkillRunner:
             try:
                 async with self._client_factory(
                     mode="empty", working_directory=str(working), base_directory=str(home / "home"),
-                    github_token=token, use_logged_in_user=False,
+                    github_token=token, use_logged_in_user=False, builtin_plugin_directories=[],
                     enable_remote_sessions=False, log_level="error",
                 ) as client:
                     session = await client.create_session(
@@ -295,7 +295,8 @@ class CopilotSkillRunner:
                         }], agent="retriever",
                         enable_config_discovery=False, skip_custom_instructions=True,
                         enable_file_hooks=False, enable_host_git_operations=False,
-                        enable_session_store=False, memory={"enabled": False},
+                        enable_session_store=False, plugin_directories=[], mcp_servers={},
+                        enable_mcp_apps=False, memory={"enabled": False},
                         infinite_sessions={"enabled": False}, large_output={"enabled": False},
                     )
                     try:

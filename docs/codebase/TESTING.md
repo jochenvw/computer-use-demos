@@ -27,24 +27,26 @@ There is no coverage command. `[TODO]`
 
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
-| Unit | Yes | Source routing, browser bounds/origins, Astra tool loop, patient verification, FHIR, files | Fake model/browser responses and temporary data |
-| Integration | Yes | Authenticated API, jobs, results, file download, audit redaction | In-process `TestClient` with fixture backend |
-| Runtime smoke | Yes | Real loopback API and dedicated headless Edge CDP actions | Synthetic page only; no Epic/model/tunnel connection |
-| E2E | Manual only | Actual Astra deployment plus hospital Epic workflow | Requires authorized training environment |
+| Unit | Yes | Source routing, browser bounds/origins, Copilot SDK session options, patient verification, FHIR/XML/HL7, cache, files | Fake SDK/browser responses and temporary data |
+| Integration | Yes | Authenticated API, jobs, default FHIR JSON, XML/HL7, file download, cache headers, audit redaction | In-process `TestClient` with fixture backend |
+| Runtime smoke | Yes | Managed Copilot runtime provisioning, no-model SDK session creation, real loopback API, and dedicated headless Edge CDP actions | Synthetic page only; no Epic/model/tunnel connection |
+| E2E | Manual only | Actual Copilot model plus hospital Epic workflow | Requires authorized training environment |
 
 ### 4) Mocking and Isolation Strategy
 
 - Temporary directories isolate file and audit tests.
-- `EhrAdapter` separates the API/job layer from fixture and Astra browser retrieval.
-- The live model loop is exercised with fake Responses API outputs. Browser
-  screenshots and controls are also exercised against an isolated real Edge.
-  No claims are made about actual Epic navigation/model availability.
+- `EhrAdapter` separates the API/job layer from fixture and Copilot skill retrieval.
+- The Copilot CLI lifecycle, selected-skill registration, custom-only tool
+  allowlist, permission denial and cleanup are exercised with fake SDK calls.
+  Browser screenshots and controls are also exercised against an isolated real
+  Edge on Windows. No claims are made about actual Epic navigation/model
+  availability.
 
 ### 5) Coverage and Quality Signals
 
 - Coverage tool and threshold: `[TODO]`.
 - Current reported coverage: `[TODO]`.
-- Known gaps: plant window matching, real Epic workflows, actual model requests,
+- Known gaps: plant window matching, real Epic workflows, live model requests,
   tunnel hosting and Entra ID authentication have not been exercised.
 - The solution build succeeds; NuGet emits compatibility warnings for transitive
   plant chart dependencies.

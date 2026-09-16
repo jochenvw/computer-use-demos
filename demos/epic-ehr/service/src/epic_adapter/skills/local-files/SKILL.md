@@ -31,3 +31,9 @@ empty resources list; the host still returns original file download links.
 If a supported report contains requested data, open it and return its documented
 fields rather than finishing with just a file list. Unreadable files fail
 explicitly; never conceal failures with fabricated or stale clinical results.
+
+For an opened ECG report with an existing interpretation, return
+resource_type=ecg with DiagnosticReport-compatible data such as status, code,
+subject, effectiveDateTime and conclusion. Preserve documented component
+observations when present. Do not infer a new conclusion from ECG pixels,
+waveforms, DICOM or SCP-ECG payloads.

@@ -32,7 +32,7 @@
 |----------|-------------------|------------------------|
 | `plant-operations/app/` | Local simulator UI and synthetic state | Cloud credentials or agent API calls |
 | `plant-operations/agent/` | Screenshot capture, model calls, UI execution, prompts | Sensitive data or real control-system adapters |
-| `epic-ehr/service/` | Authenticated API, jobs, adapters, file catalog, formats, audit | Hospital credentials or deployment state |
+| `epic-ehr/service/` | Authenticated API, jobs, adapters, Copilot skill runner, packaged skills, file catalog, formats, audit | Hospital credentials or deployment state |
 | `epic-ehr/fixtures/` | Synthetic patient and diagnostic-file examples | Real protected health information |
 | `epic-ehr/infra/` | Parameterized Azure VM/Bastion infrastructure | Secrets or logged-in desktop state |
 | `docs/` | Verified maintenance documentation | Runtime state |
@@ -45,7 +45,9 @@
 - The plant demo uses `app/` and `agent/`; the Epic adapter uses `service/`,
   `fixtures/`, and `infra/`.
 - Plant Python modules use top-level local imports. The Epic service is an
-  installable `src/epic_adapter` package with relative imports.
+  installable `src/epic_adapter` package with relative imports. Its
+  `src/epic_adapter/skills/*/SKILL.md` files are packaged data for runtime use,
+  not checkout-only prompts.
 
 ### 5) Evidence
 
