@@ -2,7 +2,8 @@
 param(
     [ValidateRange(1, 65535)]
     [int]$Port = 8000,
-    [switch]$BannerOnly
+    [switch]$BannerOnly,
+    [switch]$WithTunnel
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,6 +23,7 @@ try {
     }
     $flags = @('--port', "$Port")
     if ($BannerOnly) { $flags += '--banner-only' }
+    if ($WithTunnel) { $flags += '--tunnel' }
     & uv run epic-agent @flags
     exit $LASTEXITCODE
 } finally {

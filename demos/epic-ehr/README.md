@@ -206,6 +206,38 @@ For clinical use, replace it with organization-approved private ingress, Entra I
 authorization and TLS. The demo API has one shared operator principal, not
 multi-user or patient-level authorization.
 
+## Local testing UI and VM startup
+
+On the Windows VM, RDP through Bastion, manually sign in to the dedicated
+authorized Epic browser, then start the API and its authenticated tunnel as one
+owned process:
+
+```powershell
+.\run.ps1 -WithTunnel
+```
+
+It waits for loopback health and prints the **actual** HTTPS `devtunnels.ms`
+URL only after the CLI establishes it. `devtunnel user login` is manual and
+must be completed first. Ctrl+C closes both owned children. It never tunnels
+CDP port 9222 or RDP port 3389.
+
+On the local machine, install the demo package, then run:
+
+```powershell
+cd .\demos\epic-ehr\service
+uv sync --extra test
+.\testing.ps1
+```
+
+Open `http://127.0.0.1:8765`, paste the printed tunnel URL, API bearer token,
+and (when required) a separate tunnel connect token. The local UI uses a
+loopback-only same-origin relay rather than changing API CORS or using an
+anonymous tunnel. It accepts only an HTTPS `*.devtunnels.ms` origin and fixed
+job/result/file routes; it does not retain credentials after disconnect or page
+exit. Fixture mode remains the safe default. `bypass_cache` intentionally
+causes live skill work only in the Copilot backend, so use it only after the
+manual authorized browser login.
+
 ## API and output formats
 
 | Method | Path | Purpose |
