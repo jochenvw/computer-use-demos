@@ -58,7 +58,7 @@ def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: st
 
 
 def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, body: bytes | None = None):
-    headers = {"Authorization": f"{'Bearer'} {bearer}", "Accept": "*/*"}
+    headers = {"Authorization": " ".join(("Bearer", bearer)), "Accept": "*/*"}
     if tunnel_token:
         headers["X-Tunnel-Authorization"] = f"tunnel {tunnel_token}"
     if body is not None:
@@ -121,7 +121,10 @@ def make_handler(csrf: str, allow_loopback: bool):
                 self._send(404, b'{"error":"Not found."}')
                 return
             try:
-                length = int(self.headers.get("Content-Length", "0"))
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError as exc:
+                    raise ValueError("Invalid Content-Length header.") from exc
                 if length > 16384:
                     raise ValueError("Request is too large.")
                 data = json.loads(self.rfile.read(length))
@@ -153,7 +156,7 @@ def make_handler(csrf: str, allow_loopback: bool):
                 self._send(400, json.dumps({"error": f"Missing required field: {exc.args[0]}."}).encode())
             except TypeError:
                 self._send(400, b'{"error":"Request fields have invalid types."}')
-            except (ValueError, json.JSONDecodeError) as exc:
+            except ValueError as exc:
                 self._send(400, json.dumps({"error": str(exc)}).encode())
 
     return Handler
