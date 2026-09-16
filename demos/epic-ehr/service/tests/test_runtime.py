@@ -70,7 +70,7 @@ class RuntimeTests(unittest.TestCase):
                         break
                     time.sleep(0.01)
                 self.assertEqual("complete", status)
-                with urlopen(Request(base + job["result_url"], headers=headers), timeout=5) as response:
+                with urlopen(Request(base + job["result_url"] + "?format=json", headers=headers), timeout=5) as response:
                     result = json.load(response)
                 self.assertEqual([], result["resources"])
                 self.assertEqual(1, len(result["files"]))

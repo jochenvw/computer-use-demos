@@ -4,11 +4,13 @@ import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from .adapters.base import EhrAdapter
 from .audit import AuditWriter
+from .cache import RetrievalCache
 from .file_catalog import FileCatalog
-from .models import ClinicalBundle, JobRecord, JobStatus, RetrievalRequest, RetrievalSource
+from .models import ClinicalBundle, JobRecord, JobStatus, ResourceType, RetrievalRequest, RetrievalSource
 from .progress import emit
 
 logger = logging.getLogger(__name__)
@@ -20,10 +22,17 @@ class JobService:
         adapter: EhrAdapter,
         file_catalog: FileCatalog,
         audit: AuditWriter,
+        *,
+        cache: RetrievalCache | None = None,
+        backend_scope: str = "fixture",
+        file_retriever: Callable[[str, list[ResourceType], FileCatalog], ClinicalBundle] | None = None,
     ) -> None:
         self._adapter = adapter
         self._file_catalog = file_catalog
         self._audit = audit
+        self._cache = cache if cache is not None else RetrievalCache()
+        self._backend_scope = backend_scope
+        self._file_retriever = file_retriever
         self._jobs: dict[str, JobRecord] = {}
         self._gui_lock = threading.Lock()
         self._records_lock = threading.Lock()
@@ -83,28 +92,60 @@ class JobService:
             with self._gui_lock:
                 job.status = JobStatus.running
                 emit(f"JOB {job_id[:8]}  running")
-                resources = []
-                files = []
-                if request.source in {RetrievalSource.ehr, RetrievalSource.both}:
-                    emit("EHR      retrieving requested chart resources")
-                    resources = self._adapter.retrieve(
-                        request.patient_id, request.resources
+                key = self._cache.key(request, caller_id, self._backend_scope)
+                if request.bypass_cache:
+                    self._cache.invalidate(key)
+                entry = None if request.bypass_cache else self._cache.get(key)
+                job.cache_status = "bypass" if request.bypass_cache else "hit" if entry else "miss"
+                emit(f"CACHE    {job.cache_status}")
+                if entry is None:
+                    resources = []
+                    files = []
+                    if request.source in {RetrievalSource.ehr, RetrievalSource.both}:
+                        emit("EHR      retrieving requested chart resources")
+                        resources = self._adapter.retrieve(request.patient_id, request.resources)
+                    if request.source in {RetrievalSource.files, RetrievalSource.both}:
+                        if self._file_retriever is not None:
+                            local = self._file_retriever(
+                                request.patient_id, request.resources, self._file_catalog,
+                            )
+                            if local.patient_id != request.patient_id:
+                                raise ValueError("Local-file retrieval patient mismatch.")
+                            resources.extend(local.resources)
+                            files = local.files
+                        else:
+                            emit("FILES    searching approved patient directories")
+                            files = self._file_catalog.find(request.patient_id)
+                    if request.observation_codes:
+                        codes = set(request.observation_codes)
+                        resources = [
+                            resource for resource in resources
+                            if resource.resource_type != ResourceType.observations
+                            or codes.intersection(
+                                str(coding.get("code", ""))
+                                for concept in [resource.data.get("code", {})] + [
+                                    part.get("code", {}) for part in resource.data.get("component", [])
+                                ]
+                                for coding in concept.get("coding", [])
+                            )
+                        ]
+                    bundle = ClinicalBundle(
+                        patient_id=request.patient_id, resources=resources, files=files,
                     )
-                if request.source in {RetrievalSource.files, RetrievalSource.both}:
-                    emit("FILES    searching approved patient directories")
-                    files = self._file_catalog.find(request.patient_id)
-                    emit(f"FILES    found {len(files)} file(s)")
-            bundle = ClinicalBundle(
-                patient_id=request.patient_id, resources=resources, files=files,
-            )
-            self._audit.write(
-                event="retrieval-finished", caller_id=caller_id,
-                patient_id=request.patient_id, job_id=job_id, outcome="complete",
-            )
-            job.bundle = bundle
-            job.completed_at = datetime.now(timezone.utc)
-            job.status = JobStatus.complete
-            emit(f"JOB {job_id[:8]}  complete / {len(resources)} resource(s), {len(files)} file(s)")
+                else:
+                    bundle = entry.bundle
+                self._audit.write(
+                    event="retrieval-finished", caller_id=caller_id,
+                    patient_id=request.patient_id, job_id=job_id, outcome="complete",
+                )
+                if entry is None:
+                    entry = self._cache.put(key, bundle)
+                job.bundle = bundle
+                job.collected_at = entry.collected_at
+                job.expires_at = entry.expires_at
+                job.completed_at = datetime.now(timezone.utc)
+                job.status = JobStatus.complete
+                emit(f"JOB {job_id[:8]}  complete / {len(bundle.resources)} resource(s), {len(bundle.files)} file(s)")
         except Exception as exc:
             job.error = "Retrieval failed. Contact the service operator with the job ID."
             # Exception messages/tracebacks can contain patient data or model responses.
