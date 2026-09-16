@@ -97,7 +97,8 @@ def run_with_tunnel(console: Console, port: int) -> None:
                     if response.status == 200:
                         break
             except OSError:
-                time.sleep(.2)
+                pass
+            time.sleep(.2)
         else:
             raise RuntimeError("API health check timed out.")
         tunnel = subprocess.Popen(

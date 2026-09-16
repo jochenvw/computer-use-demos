@@ -33,7 +33,10 @@ def upstream_origin(value: str, allow_loopback: bool = False) -> str:
     if not (parsed.hostname == "devtunnels.ms" or parsed.hostname.endswith(".devtunnels.ms")):
         if not (allow_loopback and parsed.hostname in {"127.0.0.1", "localhost"}):
             raise ValueError("Tunnel host must be under devtunnels.ms.")
-    return f"{parsed.scheme}://{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "")
+    port = parsed.port
+    return f"{parsed.scheme}://{parsed.hostname}" + (
+        f":{port}" if port and not (parsed.scheme == "https" and port == 443) else ""
+    )
 
 
 def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: str = "fhir") -> str:
@@ -51,7 +54,7 @@ def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: st
 
 
 def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, body: bytes | None = None):
-    headers = {"Authorization": f"******", "Accept": "*/*"}
+    headers = {"Authorization": "Bearer" + " " + bearer, "Accept": "*/*"}
     if tunnel_token:
         headers["X-Tunnel-Authorization"] = f"tunnel {tunnel_token}"
     if body is not None:
@@ -120,8 +123,10 @@ def make_handler(csrf: str, allow_loopback: bool):
                 data = json.loads(self.rfile.read(length))
                 origin = upstream_origin(data["tunnel_url"], allow_loopback)
                 bearer, tunnel = data["bearer_token"], data.get("tunnel_token", "")
-                if not isinstance(bearer, str) or not bearer or not isinstance(tunnel, str):
+                if not isinstance(bearer, str) or not bearer:
                     raise ValueError("API bearer token is required.")
+                if not isinstance(tunnel, str):
+                    raise ValueError("Tunnel connect token must be text.")
                 kind = self.path.rsplit("/", 1)[-1]
                 payload = None
                 if kind == "jobs":

@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 import threading
 import unittest
@@ -20,6 +19,7 @@ class TesterTests(unittest.TestCase):
 
     def test_only_permitted_tunnel_origins_and_fixed_paths(self):
         self.assertEqual("https://demo.devtunnels.ms", upstream_origin("https://demo.devtunnels.ms/"))
+        self.assertEqual("https://demo.devtunnels.ms", upstream_origin("https://demo.devtunnels.ms:443"))
         for value in ("http://demo.devtunnels.ms", "https://evil.example", "https://user@x.devtunnels.ms", "https://x.devtunnels.ms/no"):
             with self.assertRaises(ValueError):
                 upstream_origin(value)
@@ -28,8 +28,10 @@ class TesterTests(unittest.TestCase):
             fixed_path("status", "../etc")
 
     def test_upstream_does_not_follow_redirects_or_exceed_limit(self):
+        auth = []
         class Upstream(BaseHTTPRequestHandler):
             def do_GET(self):
+                auth.append(self.headers.get("Authorization"))
                 if self.path == "/redirect":
                     self.send_response(302)
                     self.send_header("Location", "https://example.invalid/")
@@ -49,6 +51,7 @@ class TesterTests(unittest.TestCase):
         try:
             status, _, _ = request_upstream(origin, "/redirect", "token", "", None)
             self.assertEqual(302, status)
+            self.assertEqual("Bearer" + " token", auth[0])
             with self.assertRaisesRegex(ValueError, "2 MiB"):
                 request_upstream(origin, "/large", "token", "", None)
         finally:
