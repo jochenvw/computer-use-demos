@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -116,6 +116,7 @@ def run_with_tunnel(console: Console, port: int) -> None:
 
         reader = threading.Thread(target=copy_output, daemon=True)
         reader.start()
+        printed_url = False
         while True:
             try:
                 line = lines.get(timeout=.2)
@@ -124,8 +125,9 @@ def run_with_tunnel(console: Console, port: int) -> None:
             if line is None:
                 raise RuntimeError("Dev tunnel exited. Check devtunnel user login and network access.")
             match = re.search(r"https://[a-z0-9.-]+\.devtunnels\.ms(?::443)?", line, re.I)
-            if match:
+            if match and not printed_url:
                 console.print(Panel(match.group(0), title="Tunnel HTTPS URL (copy this)", border_style="green"))
+                printed_url = True
             if api.poll() is not None:
                 raise RuntimeError("API child exited; closing tunnel.")
             if tunnel.poll() is not None:
