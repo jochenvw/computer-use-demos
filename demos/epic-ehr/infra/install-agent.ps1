@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$ArchiveBase64,
+    [Parameter(Mandatory)][string]$ArchiveUriBase64,
     [Parameter(Mandatory)][string]$ArchiveSha256,
     [Parameter(Mandatory)][string]$SourceCommit,
     [string]$AdminUser = 'demoadmin'
@@ -11,19 +11,30 @@ $root = 'C:\EpicDemo'
 $service = Join-Path $root 'service'
 $uv = 'C:\DemoTools\uv\uv.exe'
 if (-not (Test-Path -LiteralPath $uv)) { throw 'Run bootstrap-tools.ps1 first.' }
-$bytes = [Convert]::FromBase64String($ArchiveBase64)
-$hash = [Security.Cryptography.SHA256]::Create()
-try {
-    $actual = [BitConverter]::ToString($hash.ComputeHash($bytes)).Replace('-', '')
-} finally { $hash.Dispose() }
-if ($actual -ne $ArchiveSha256) { throw 'Source archive integrity check failed.' }
 if ($SourceCommit -notmatch '^[a-f0-9]{40}$') { throw 'A full source commit ID is required.' }
+$uriText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ArchiveUriBase64))
+$uri = $null
+if (-not [Uri]::TryCreate($uriText, [UriKind]::Absolute, [ref]$uri) -or
+    $uri.Scheme -ne 'https' -or $uri.Port -ne 443 -or $uri.UserInfo -or $uri.Fragment -or
+    $uri.Host -notmatch '^[a-z0-9]+\.blob\.core\.windows\.net$' -or
+    $uri.AbsolutePath -ne "/releases/$SourceCommit.zip") {
+    throw 'The deployment archive must be a versioned HTTPS blob in the private release container.'
+}
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $archive = Join-Path $root 'source-install.zip'
 try {
-    [IO.File]::WriteAllBytes($archive, $bytes)
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $uri.AbsoluteUri -OutFile $archive -MaximumRedirection 0
+    } catch {
+        throw 'Private release download failed. Check the protected read token and storage connectivity.'
+    }
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $ArchiveSha256) {
+        throw 'Source archive integrity check failed.'
+    }
     Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
 } finally {
+    $uriText = $null
+    $ArchiveUriBase64 = $null
     if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive }
 }
 $env:UV_PYTHON_INSTALL_DIR = 'C:\DemoTools\python'

@@ -32,6 +32,33 @@ var vnetName = '${prefix}-vnet'
 var workloadSubnetName = 'desktop'
 var bastionSubnetName = 'AzureBastionSubnet'
 
+resource artifacts 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: '${take(prefix, 8)}${uniqueString(resourceGroup().id)}'
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+  properties: {
+    allowBlobPublicAccess: false
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: artifacts
+  name: 'default'
+}
+
+resource releases 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'releases'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: '${prefix}-desktop-nsg'
   location: location
@@ -260,3 +287,4 @@ output vmPrivateIp string = nic.properties.ipConfigurations[0].properties.privat
 output bastionName string = bastion.name
 output vmResourceId string = vm.id
 output deploymentLocation string = location
+output artifactStorageName string = artifacts.name

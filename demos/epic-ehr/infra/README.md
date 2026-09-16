@@ -16,6 +16,9 @@ Bastion native tunneling is enabled explicitly. The VM subnet denies other
 inbound traffic, including SQL 1433, API 8000, and browser CDP 9222. A NAT gateway
 provides explicit outbound access for dependencies, model requests, and devtunnel.
 Its public IP is **not** a VM inbound endpoint.
+An LRS storage account holds private, commit-versioned source archives. Public
+blob access is disabled; publishing uses a one-hour, read-only, single-blob SAS
+delivered as a protected Run Command parameter, not a command-line secret.
 
 ## Deploy and prepare
 
@@ -59,7 +62,7 @@ Install signed Microsoft tools and the checksum-verified pinned `uv` release:
 
 The SQL setup uses the verified Windows administrator identity for SQL Windows
 authentication rather than Run Command's SYSTEM identity. Credentials and the
-source archive travel as encrypted/protected Run Command parameters. Setup
+short-lived archive URL travel as encrypted/protected Run Command parameters. Setup
 creates only the `EpicDemo` synthetic database/tables if absent; it does not
 replace existing data. SQL memory is capped at 8 GiB to leave room for Edge,
 SSMS and the agent.
@@ -157,7 +160,7 @@ demo; the VM administrator is intentionally privileged for initial setup.
 
 ## Cost and lifecycle
 
-The VM, disk, Bastion Standard, NAT gateway, public IPs and traffic are billable.
+The VM, disk, Bastion Standard, NAT gateway, public IPs, artifact storage and traffic are billable.
 **Stopping/deallocating the VM does not stop Bastion/NAT/disk billing.**
 Review current regional prices and subscription discounts. Remove the dedicated
 demo resource group when the environment is no longer needed, after preserving

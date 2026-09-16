@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$SubscriptionId,
-    [string]$ResourceGroup = 'rg-epic-demo-swc',
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._()-]{0,89}$')][string]$ResourceGroup = 'rg-epic-demo-swc',
     [string]$Location = 'swedencentral',
     [ValidatePattern('^[a-z][a-z0-9]{2,11}$')][string]$Prefix = 'epicdemo',
     [string]$VmSize = 'Standard_D4as_v5',
@@ -17,18 +17,23 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 }
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $stateRoot = Join-Path $repoRoot ".azure\$ResourceGroup"
+$newStateDirectory = -not (Test-Path -LiteralPath $stateRoot)
 New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
-$acl = Get-Acl -LiteralPath $stateRoot
-$acl.SetAccessRuleProtection($true, $false)
-foreach ($identity in @(
-    [System.Security.Principal.WindowsIdentity]::GetCurrent().User,
-    [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18')
-)) {
-    $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
-        $identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow'
-    ))
+$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+if ($newStateDirectory) {
+    & icacls.exe $stateRoot '/inheritance:r' '/grant:r' "*${userSid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not restrict the local deployment state directory.' }
 }
-Set-Acl -LiteralPath $stateRoot -AclObject $acl
+$acl = Get-Acl -LiteralPath $stateRoot
+$rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+$unexpected = @($rules | Where-Object {
+    $_.IdentityReference.Value -notin @($userSid, 'S-1-5-18') -or
+    $_.AccessControlType -ne 'Allow' -or $_.FileSystemRights -ne 'FullControl'
+})
+if (-not $acl.AreAccessRulesProtected -or $unexpected.Count -or
+    @($rules.IdentityReference.Value | Select-Object -Unique).Count -ne 2) {
+    throw 'Local deployment state is not restricted to the current Windows user and SYSTEM.'
+}
 $credentialPath = Join-Path $stateRoot 'vm-admin.credential.xml'
 if (Test-Path -LiteralPath $credentialPath) {
     $credential = Import-Clixml -LiteralPath $credentialPath
