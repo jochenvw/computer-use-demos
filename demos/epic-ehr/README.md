@@ -215,6 +215,10 @@ inbound firewall rule is needed. The script requires a healthy local API, uses a
 one-hour tunnel, and **does not enable anonymous access**. Ctrl+C closes it.
 
 Use the HTTPS URL printed by devtunnel in place of `http://127.0.0.1:8000`.
+Copy the **forwarded port** URL, for example
+`https://<tunnel-id>-8000.<region>.devtunnels.ms`, not the port-less
+**Inspect network activity** URL. The integrated launcher labels the forwarded
+address **API HTTPS URL (copy this)**.
 Response links are relative, so they also work behind Host-rewriting tunnels.
 Interactive clients authenticate to the tunnel. For programmatic clients, obtain
 a tunnel connect token using your devtunnel CLI's token command and send it as

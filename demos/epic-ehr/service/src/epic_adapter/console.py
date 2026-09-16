@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from rich.console import Console
@@ -100,6 +101,18 @@ def stop_child(child) -> None:
         child.wait()
 
 
+def forwarded_tunnel_url(line: str, port: int) -> str | None:
+    for match in re.finditer(
+        r"https://[a-z0-9.-]+\.devtunnels\.ms(?::443)?(?![a-z0-9.:-])",
+        line, re.I,
+    ):
+        url = match.group(0)
+        host = urlsplit(url).hostname
+        if host and host.split(".", 1)[0].endswith(f"-{port}"):
+            return url
+    return None
+
+
 def run_with_tunnel(console: Console, port: int) -> None:
     """Own both children so a failed tunnel never leaves a public endpoint behind."""
     if not shutil.which("devtunnel"):
@@ -154,9 +167,9 @@ def run_with_tunnel(console: Console, port: int) -> None:
                 raise RuntimeError("Dev tunnel exited. Check devtunnel user login and network access.")
             if time.monotonic() >= tunnel_deadline and not printed_url:
                 raise RuntimeError("Timed out waiting for devtunnel HTTPS URL. Check devtunnel user login and host access.")
-            match = re.search(r"https://[a-z0-9.-]+\.devtunnels\.ms(?::443)?", line, re.I)
-            if match and not printed_url:
-                console.print(Panel(match.group(0), title="Tunnel HTTPS URL (copy this)", border_style="green"))
+            url = forwarded_tunnel_url(line, port)
+            if url and not printed_url:
+                console.print(Panel(url, title="API HTTPS URL (copy this)", border_style="green"))
                 printed_url = True
             if api.poll() is not None:
                 raise RuntimeError("API child exited; closing tunnel.")
