@@ -45,6 +45,8 @@ caller -> authenticated API -> serialized retrieval job
 | File catalog | Patient-scoped allowlisted local files | Arbitrary filesystem access | `demos/epic-ehr/service/src/epic_adapter/file_catalog.py` |
 | Formatters | FHIR JSON/XML, limited HL7 ORU, normalized JSON/NDJSON | Source retrieval or full FHIR profile validation | `demos/epic-ehr/service/src/epic_adapter/formats.py` |
 | Bicep | Private Windows VM, custom image, Bastion, NSG | Epic/browser session state | `demos/epic-ehr/infra/main.bicep` |
+| Release workflow | Tests, packages and attests exact `epic-v*` commits | Runtime secrets or local patient files | `.github/workflows/epic-release.yml` |
+| Desktop launcher | Per-version staging, authenticated drain, synthetic validation, activation and rollback | Automatic newest-release selection or unattended Epic login | `demos/epic-ehr/launcher/Start-EpicDemo.ps1` |
 
 ### 4) Reused Patterns
 
@@ -55,6 +57,7 @@ caller -> authenticated API -> serialized retrieval job
 | Adapter | `EhrAdapter`, fixture adapter, computer-use adapter | Keeps API callers independent of retrieval mechanism |
 | Opaque job | Epic API and `JobService` | Hides long-running serialized GUI work from callers |
 | Allowlist | Epic `FileCatalog` and `CopilotSkillRunner` | Prevents arbitrary filesystem retrieval and unmanaged runtime tools |
+| Local blue/green activation | Version directories plus current/previous state | Keeps the last working release available across failed updates |
 
 ### 5) Known Architectural Risks
 
@@ -71,6 +74,8 @@ caller -> authenticated API -> serialized retrieval job
   Entra ID, private gateway controls, and policy enforcement.
 - The plant A2A server remains a separate exposure path, although live execution
   is now blocked by the same `run()` validation.
+- Release integrity depends on GitHub artifact attestation verification through
+  `gh`; private downloads additionally require a short-lived installer token.
 
 ### 6) Evidence
 

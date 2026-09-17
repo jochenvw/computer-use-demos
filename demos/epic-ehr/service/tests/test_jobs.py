@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -6,7 +7,7 @@ from unittest.mock import Mock
 
 from epic_adapter.audit import AuditWriter
 from epic_adapter.file_catalog import FileCatalog
-from epic_adapter.jobs import JobService
+from epic_adapter.jobs import JobService, ServiceDrainingError
 from epic_adapter.models import ClinicalResource, ResourceType, RetrievalRequest, SourceRecord
 
 
@@ -81,3 +82,59 @@ class JobRoutingTests(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("complete", job.status)
         self.assertEqual(["bp"], [resource.source_id for resource in job.bundle.resources])
+
+    def test_drain_blocks_new_jobs_after_active_work_finishes(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        release = threading.Event()
+        adapter = Mock()
+        def retrieve(*_):
+            release.wait(2)
+            return []
+        adapter.retrieve.side_effect = retrieve
+        jobs = JobService(adapter, Mock(), AuditWriter(root / "audit.jsonl"))
+        job = jobs.create(RetrievalRequest(
+            patient_id="DEMO-100042", source="ehr",
+        ), "test")
+        for _ in range(100):
+            if job.status == "running":
+                break
+            time.sleep(0.01)
+        drained = []
+        thread = threading.Thread(target=lambda: drained.append(jobs.drain(2)))
+        thread.start()
+        time.sleep(0.05)
+        with self.assertRaises(ServiceDrainingError):
+            jobs.create(RetrievalRequest(
+                patient_id="DEMO-100042", source="ehr",
+            ), "test")
+        release.set()
+        thread.join(2)
+        self.assertEqual([True], drained)
+        status = jobs.service_status()
+        self.assertFalse(status["accepting_jobs"])
+        self.assertEqual(0, status["active_jobs"])
+        self.assertGreater(status["process_id"], 0)
+
+    def test_failed_drain_resumes_job_acceptance(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        release = threading.Event()
+        adapter = Mock()
+        def retrieve(*_):
+            release.wait(2)
+            return []
+        adapter.retrieve.side_effect = retrieve
+        jobs = JobService(adapter, Mock(), AuditWriter(root / "audit.jsonl"))
+        jobs.create(RetrievalRequest(
+            patient_id="DEMO-100042", source="ehr",
+        ), "test")
+        self.assertFalse(jobs.drain(0.01))
+        self.assertTrue(jobs.service_status()["accepting_jobs"])
+        release.set()
+        for _ in range(100):
+            if jobs.service_status()["active_jobs"] == 0:
+                break
+            time.sleep(0.01)

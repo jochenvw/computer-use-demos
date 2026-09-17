@@ -19,6 +19,7 @@ class Settings:
     audit_path: Path
     browser_cdp_url: str = "http://127.0.0.1:9222"
     epic_origin: str = ""
+    epic_ready_url_prefix: str = ""
     max_browser_steps: int = 40
     skill_timeout_seconds: int = 180
     cache_ttl_seconds: int = 900
@@ -59,6 +60,9 @@ class Settings:
                 "EPIC_BROWSER_CDP_URL", "http://127.0.0.1:9222"
             ),
             epic_origin=os.environ.get("EPIC_ORIGIN", "").rstrip("/"),
+            epic_ready_url_prefix=os.environ.get(
+                "EPIC_READY_URL_PREFIX", ""
+            ).rstrip("/"),
             max_browser_steps=int(os.environ.get("EPIC_MAX_BROWSER_STEPS", "40")),
             skill_timeout_seconds=int(os.environ.get("EPIC_SKILL_TIMEOUT_SECONDS", "180")),
             cache_ttl_seconds=int(os.environ.get("EPIC_CACHE_TTL_SECONDS", "900")),
@@ -79,6 +83,7 @@ class Settings:
                 for name, value in {
                     "EPIC_COMPUTER_USE_ENABLED=1": self.computer_use_enabled,
                     "EPIC_ORIGIN": self.epic_origin,
+                    "EPIC_READY_URL_PREFIX": self.epic_ready_url_prefix,
                 }.items()
                 if not value
             ]
@@ -92,6 +97,24 @@ class Settings:
                     or origin.username or origin.password
                     or origin.path or origin.query or origin.fragment):
                 raise RuntimeError("EPIC_ORIGIN must be an exact HTTPS origin with no path.")
+            ready_url = urlsplit(self.epic_ready_url_prefix)
+            ready_port = ready_url.port
+            ready_suffix = (
+                f":{ready_port}"
+                if ready_port and ready_port != (443 if ready_url.scheme == "https" else 80)
+                else ""
+            )
+            ready_origin = (
+                f"{ready_url.scheme}://{(ready_url.hostname or '').lower()}{ready_suffix}"
+            )
+            if (ready_url.scheme != "https" or not ready_url.hostname
+                    or ready_url.username or ready_url.password
+                    or ready_url.query or ready_url.fragment
+                    or ready_origin != self.epic_origin.lower()):
+                raise RuntimeError(
+                    "EPIC_READY_URL_PREFIX must be an HTTPS URL on EPIC_ORIGIN "
+                    "with no credentials, query, or fragment."
+                )
             cdp = urlsplit(self.browser_cdp_url)
             if (cdp.scheme != "http" or cdp.hostname not in {"127.0.0.1", "localhost"}
                     or cdp.username or cdp.password or cdp.path or cdp.query

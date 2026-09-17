@@ -35,6 +35,8 @@
 | `epic-ehr/service/` | Authenticated API, jobs, adapters, Copilot skill runner, packaged skills, file catalog, formats, audit | Hospital credentials or deployment state |
 | `epic-ehr/fixtures/` | Synthetic patient and diagnostic-file examples | Real protected health information |
 | `epic-ehr/infra/` | Parameterized Azure VM/Bastion infrastructure | Secrets or logged-in desktop state |
+| `epic-ehr/launcher/` | Current-user bootstrap, exact-version/channel install, drain, activation and rollback | Versioned service files or persisted GitHub tokens |
+| `epic-ehr/release/` | Builds tracked archives and version/lock manifests | Local runtime state |
 | `docs/` | Verified maintenance documentation | Runtime state |
 | `scripts/` | Parameterized local helpers | Tenant-, subscription-, or host-specific values |
 
@@ -55,3 +57,5 @@
 - `computer-use-demos.slnx`
 - `demos/plant-operations/README.md`
 - `demos/epic-ehr/README.md`
+- `demos/epic-ehr/launcher/Start-EpicDemo.ps1`
+- `.github/workflows/epic-release.yml`

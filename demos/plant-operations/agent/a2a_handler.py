@@ -17,11 +17,11 @@ from a2a.types import (
     Message,
     Part,
     Role,
+    Task,
     TaskArtifactUpdateEvent,
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
-    TextPart,
 )
 
 from agent import run as run_sre_agent
@@ -36,44 +36,52 @@ class SREAgentExecutor(AgentExecutor):
         task_id = context.task_id
         context_id = context.context_id
 
-        event_queue.enqueue_event(
+        if context.current_task is None:
+            await event_queue.enqueue_event(
+                Task(
+                    id=task_id,
+                    context_id=context_id,
+                    status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+                    history=[context.message] if context.message is not None else [],
+                )
+            )
+
+        await event_queue.enqueue_event(
             self._make_status_event(
-                task_id, context_id, TaskState.working, "SRE agent started.", final=False
+                task_id, context_id, TaskState.TASK_STATE_WORKING, "SRE agent started."
             )
         )
 
         try:
             summary = await asyncio.to_thread(run_sre_agent)
 
-            event_queue.enqueue_event(
+            await event_queue.enqueue_event(
                 self._make_artifact_event(task_id, context_id, summary)
             )
-            event_queue.enqueue_event(
+            await event_queue.enqueue_event(
                 self._make_status_event(
-                    task_id, context_id, TaskState.completed, "SRE agent finished.", final=True
+                    task_id, context_id, TaskState.TASK_STATE_COMPLETED, "SRE agent finished."
                 )
             )
         except Exception as exc:
-            event_queue.enqueue_event(
+            await event_queue.enqueue_event(
                 self._make_status_event(
                     task_id,
                     context_id,
-                    TaskState.failed,
+                    TaskState.TASK_STATE_FAILED,
                     f"SRE agent failed: {exc}",
-                    final=True,
                 )
             )
 
     async def cancel(
         self, context: RequestContext, event_queue: EventQueue
     ) -> None:
-        event_queue.enqueue_event(
+        await event_queue.enqueue_event(
             self._make_status_event(
                 context.task_id,
                 context.context_id,
-                TaskState.canceled,
+                TaskState.TASK_STATE_CANCELED,
                 "Task canceled by request.",
-                final=True,
             )
         )
 
@@ -81,23 +89,18 @@ class SREAgentExecutor(AgentExecutor):
     def _make_status_event(
         task_id: str,
         context_id: str,
-        state: TaskState,
+        state: int,
         message_text: str,
-        *,
-        final: bool,
     ) -> TaskStatusUpdateEvent:
         return TaskStatusUpdateEvent(
             task_id=task_id,
             context_id=context_id,
-            kind="status-update",
-            final=final,
             status=TaskStatus(
                 state=state,
                 message=Message(
-                    role=Role.agent,
-                    parts=[Part(root=TextPart(text=message_text))],
+                    role=Role.ROLE_AGENT,
+                    parts=[Part(text=message_text)],
                     message_id=str(uuid.uuid4()),
-                    kind="message",
                 ),
             ),
         )
@@ -109,10 +112,9 @@ class SREAgentExecutor(AgentExecutor):
         return TaskArtifactUpdateEvent(
             task_id=task_id,
             context_id=context_id,
-            kind="artifact-update",
             artifact=Artifact(
                 artifact_id="sre-agent-result",
                 name="SRE Agent Execution Summary",
-                parts=[Part(root=TextPart(text=json.dumps(summary_dict, indent=2)))],
+                parts=[Part(text=json.dumps(summary_dict, indent=2))],
             ),
         )

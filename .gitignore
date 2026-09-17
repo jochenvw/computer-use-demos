@@ -23,6 +23,7 @@
 **/downloads/
 **/dist/
 *.log
+.azure/
 
 # Packages and archives
 *.zip

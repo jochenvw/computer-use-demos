@@ -12,6 +12,7 @@
 | Optional Azure BYOM model | OpenAI-compatible endpoint | Model backend for the isolated Copilot runtime | Entra ID bearer token from `DefaultAzureCredential`; no Azure API keys | High | `demos/epic-ehr/service/src/epic_adapter/skill_runner.py` |
 | Microsoft dev tunnels | Outbound HTTPS forwarding | Synthetic demo API access without inbound firewall rule | Tunnel owner identity/connect token AND API bearer token | Optional | `demos/epic-ehr/service/tunnel.ps1` |
 | Azure Bastion | Managed Azure service | Administrative access to private desktop VM | Azure RBAC | High | `demos/epic-ehr/infra/main.bicep` |
+| GitHub Releases and attestations | HTTPS / `gh` CLI | Exact-version archive download and repository-identity verification | Installer-process token for private releases; GitHub attestation identity | High | `.github/workflows/epic-release.yml`, `demos/epic-ehr/launcher/Start-EpicDemo.ps1` |
 | Plant A2A server | HTTP/JSON-RPC | Expose the plant agent to A2A clients | No application auth is present | Medium | `demos/plant-operations/agent/a2a_server.py` |
 
 ### 2) Data Stores
@@ -38,6 +39,8 @@ No durable database/queue exists. A real Epic instance has not been connected.
   placeholders.
 - The repository-level secret scan must be rerun before every public push.
 - Credential rotation policy is external to this repository. `[TODO]`
+- `EPIC_RELEASE_GITHUB_TOKEN` is read only from the installer process and is not
+  written to launcher state or shared `.env`.
 
 ### 4) Reliability and Failure Behavior
 
@@ -47,6 +50,8 @@ No durable database/queue exists. A real Epic instance has not been connected.
   and no automatic stale fallback; the configurable browser-step limit defaults
   to 40 (maximum 100). No durable queue.
 - Jobs are bounded to eight pending and 128 total per process.
+- Authenticated drain rejects new jobs, waits for active work, and resumes
+  acceptance if its timeout expires.
 
 ### 5) Observability for Integrations
 

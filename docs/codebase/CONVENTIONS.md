@@ -40,6 +40,8 @@
 - Rich terminal progress contains job IDs, phases and counts only. Exceptions are
   logged by type, without messages or tracebacks that could contain PHI.
 - Sensitive values are read from environment variables and excluded from source.
+- Update orchestration fails closed: a timed-out drain resumes the current
+  service, and release state changes only after activation health succeeds.
 
 ### 5) Testing Conventions
 
@@ -54,3 +56,4 @@
 - `demos/epic-ehr/service/src/epic_adapter/api.py`
 - `demos/epic-ehr/service/tests/test_api.py`
 - `SECURITY.md`
+- `demos/epic-ehr/launcher/Start-EpicDemo.ps1`

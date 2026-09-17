@@ -6,8 +6,14 @@ param location string = resourceGroup().location
 @maxLength(12)
 param prefix string
 
-@description('Resource ID of the organization-approved generalized Windows desktop image.')
-param desktopImageResourceId string
+@description('Optional generalized Windows image ID. Empty uses the SQL Server Developer marketplace image below.')
+param desktopImageResourceId string = ''
+
+@description('SQL Server Developer is licensed for development and testing only.')
+param imagePublisher string = 'MicrosoftSQLServer'
+param imageOffer string = 'sql2022-ws2022'
+param imageSku string = 'sqldev-gen2'
+param imageVersion string = '16.0.260610'
 
 @description('Windows administrator user used only through Azure Bastion.')
 param adminUsername string
@@ -16,8 +22,8 @@ param adminUsername string
 @description('Windows administrator password supplied securely at deployment time.')
 param adminPassword string
 
-@description('Private client address prefix allowed to call the API on TCP 8000.')
-param apiClientAddressPrefix string
+@description('Optional private API client CIDR. Leave empty for loopback API plus outbound authenticated devtunnel only.')
+param apiClientAddressPrefix string = ''
 
 @description('VM size for the interactive desktop worker.')
 param vmSize string = 'Standard_D4as_v5'
@@ -30,7 +36,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: '${prefix}-desktop-nsg'
   location: location
   properties: {
-    securityRules: [
+    securityRules: concat(empty(apiClientAddressPrefix) ? [] : [
       {
         name: 'AllowApiFromPrivateClients'
         properties: {
@@ -44,6 +50,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           destinationAddressPrefix: '*'
         }
       }
+    ], [
       {
         name: 'AllowRdpFromBastionSubnet'
         properties: {
@@ -57,6 +64,44 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           destinationAddressPrefix: '*'
         }
       }
+      {
+        name: 'DenyOtherInbound'
+        properties: {
+          priority: 4000
+          access: 'Deny'
+          direction: 'Inbound'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: '*'
+        }
+      }
+    ])
+  }
+}
+
+resource outboundPublicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
+  name: '${prefix}-outbound-pip'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+}
+
+resource nat 'Microsoft.Network/natGateways@2023-11-01' = {
+  name: '${prefix}-nat'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    idleTimeoutInMinutes: 10
+    publicIpAddresses: [
+      { id: outboundPublicIp.id }
     ]
   }
 }
@@ -77,6 +122,10 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
           addressPrefix: '10.80.1.0/24'
           networkSecurityGroup: {
             id: nsg.id
+          }
+          defaultOutboundAccess: false
+          natGateway: {
+            id: nat.id
           }
         }
       }
@@ -119,7 +168,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       vmSize: vmSize
     }
     osProfile: {
-      computerName: '${prefix}-desktop'
+      computerName: '${prefix}-vm'
       adminUsername: adminUsername
       adminPassword: adminPassword
       windowsConfiguration: {
@@ -132,7 +181,12 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       }
     }
     storageProfile: {
-      imageReference: {
+      imageReference: empty(desktopImageResourceId) ? {
+        publisher: imagePublisher
+        offer: imageOffer
+        sku: imageSku
+        version: imageVersion
+      } : {
         id: desktopImageResourceId
       }
       osDisk: {
@@ -140,6 +194,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
         managedDisk: {
           storageAccountType: 'Premium_LRS'
         }
+        diskSizeGB: 128
       }
     }
     networkProfile: {
@@ -152,6 +207,13 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
     diagnosticsProfile: {
       bootDiagnostics: {
         enabled: true
+      }
+    }
+    securityProfile: {
+      securityType: 'TrustedLaunch'
+      uefiSettings: {
+        secureBootEnabled: true
+        vTpmEnabled: true
       }
     }
   }
@@ -175,6 +237,8 @@ resource bastion 'Microsoft.Network/bastionHosts@2023-11-01' = {
     name: 'Standard'
   }
   properties: {
+    enableTunneling: true
+    scaleUnits: 2
     ipConfigurations: [
       {
         name: 'bastion-ipconfig'
@@ -194,3 +258,5 @@ resource bastion 'Microsoft.Network/bastionHosts@2023-11-01' = {
 output vmName string = vm.name
 output vmPrivateIp string = nic.properties.ipConfigurations[0].properties.privateIPAddress
 output bastionName string = bastion.name
+output vmResourceId string = vm.id
+output deploymentLocation string = location

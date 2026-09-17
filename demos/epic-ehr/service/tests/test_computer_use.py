@@ -21,6 +21,7 @@ def settings():
     return replace(
         Settings.from_env(), backend="copilot", computer_use_enabled=True,
         epic_origin="https://epic.example.invalid", foundry_endpoint="",
+        epic_ready_url_prefix="https://epic.example.invalid/chart",
         model_deployment="gpt-6-astra", browser_window_title="",
         browser_cdp_url="http://127.0.0.1:9222", max_browser_steps=4,
     )
