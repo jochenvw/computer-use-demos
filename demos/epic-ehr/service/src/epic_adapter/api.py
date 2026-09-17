@@ -15,6 +15,7 @@ from .file_catalog import FileCatalog
 from .formats import fhir_bundle, fhir_xml, hl7_oru, ndjson, normalized_json
 from .jobs import JobService
 from .models import JobStatus, OutputFormat, RetrievalRequest
+from .readiness import check_readiness
 
 settings = Settings.from_env()
 settings.validate()
