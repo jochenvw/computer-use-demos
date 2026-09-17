@@ -148,6 +148,56 @@ using a read-only account before restarting the agent. Keep the interactive
 desktop available. Fixture mode and cache hits intentionally do not perform
 computer use.
 
+## Azure Foundry with the VM identity
+
+The VM already has a system-assigned managed identity. Grant that identity
+**Cognitive Services OpenAI User** on the existing Azure AI account only; no
+API key, subscription-wide role, or new model deployment is needed:
+
+```powershell
+$vmPrincipal = az vm show --subscription $subscription -g rg-epic-demo-swc `
+  -n epicdemo-desktop-vm --query identity.principalId -o tsv
+$accountId = '<existing-Azure-AI-account-resource-ID>'
+az role definition list --name 'Cognitive Services OpenAI User' `
+  --query '[].{name:roleName,id:id}' -o table
+az role assignment create --assignee-object-id $vmPrincipal `
+  --assignee-principal-type ServicePrincipal `
+  --role 'Cognitive Services OpenAI User' --scope $accountId
+
+.\demos\epic-ehr\infra\run-vm-script.ps1 -SubscriptionId $subscription `
+  -ScriptPath .\demos\epic-ehr\infra\configure-foundry.ps1 `
+  -CommandName configure-foundry `
+  -ProtectedParameters @{
+    Endpoint = 'https://<account-name>.openai.azure.com'
+    Deployment = '<actual-deployment-name>'
+  }
+```
+
+Allow time for a new role assignment to propagate before retrying a denied
+request. The configuration script uses the VM managed identity and installed,
+SDK-matched Copilot runtime to perform an actual synthetic tool call and model
+reply. It persists the endpoint and deployment in the private `.env` only after
+that round trip succeeds. It never prints an access token or changes the API
+bearer, backend, browser opt-in, or running API/tunnel processes.
+
+This verifies **model access, not Epic retrieval**. To prepare the browser, run
+the following inside the interactive VM desktop and log in manually to the
+authorized demo environment with a read-only account:
+
+```powershell
+Set-Location C:\EpicDemo\service
+.\browser.ps1 -EpicUrl (Read-Host 'Paste the HTTPS demo URL')
+```
+
+Use that dedicated browser, not an ordinary Edge window; its session is exposed
+only on loopback CDP port 9222. Never tunnel CDP. Configure `EPIC_ORIGIN` as the
+exact approved chart origin (scheme and host, plus port if needed; no path),
+`EPIC_COMPUTER_USE_ENABLED=1`, and `EPIC_BACKEND=copilot` only when the login is
+ready. Restart the agent from a fresh PowerShell process to load the updated
+`.env`, then bypass the cache for an actual browser retrieval.
+Azure Global Standard deployments may process requests outside the account's
+region; use synthetic data for this demo.
+
 ## SQL / SSMS
 
 SSMS connects to `localhost` using Windows authentication. Open the desktop
