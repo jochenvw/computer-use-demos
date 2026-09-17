@@ -6,21 +6,24 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class ReleaseAssetTests(unittest.TestCase):
-    def test_workflow_is_tagged_attested_and_least_privilege(self):
+    def test_workflow_is_tagged_signed_and_least_privilege(self):
         workflow = (ROOT / ".github/workflows/epic-release.yml").read_text(
             encoding="utf-8"
         )
         self.assertIn('tags:\n      - "epic-v*"', workflow)
-        self.assertIn("actions/attest-build-provenance@v3", workflow)
+        self.assertIn("sigstore/cosign-installer@v3.10.0", workflow)
+        self.assertIn("cosign sign-blob", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn("id-token: write", workflow)
+        self.assertNotIn("attestations: write", workflow)
         self.assertNotIn("pull-requests: write", workflow)
 
     def test_launcher_verifies_exact_release_and_drains_before_update(self):
         launcher = (
             ROOT / "demos/epic-ehr/launcher/Start-EpicDemo.ps1"
         ).read_text(encoding="utf-8")
-        self.assertIn("gh attestation verify", launcher)
+        self.assertIn("cosign verify-blob", launcher)
+        self.assertIn("--certificate-identity", launcher)
         self.assertIn("/v1/admin/drain", launcher)
         self.assertIn("Approved channel", launcher)
         self.assertNotIn("/releases/latest", launcher)

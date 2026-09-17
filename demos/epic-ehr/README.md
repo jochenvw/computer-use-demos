@@ -295,15 +295,16 @@ Install the launcher separately in the interactive Windows account:
 ```powershell
 cd .\demos\epic-ehr\launcher
 .\Bootstrap-EpicDemo.ps1
-.\Start-EpicDemo.ps1 -Mode InstallVersion -Version epic-v0.3.0
+.\Start-EpicDemo.ps1 -Mode InstallVersion -Version epic-v0.3.1
 ```
 
 Bootstrap is idempotent and creates **Start Epic Demo** on that user's desktop.
 The launcher supports an exact selected tag, an operator-reviewed channel
 mapping, or the already-installed version. It never selects the newest release
 implicitly. Private release downloads use `EPIC_RELEASE_GITHUB_TOKEN` only from
-the installing process; the token is not persisted. `gh attestation verify`
-must trust the GitHub repository identity before staging proceeds.
+the installing process; the token is not persisted. The launcher verifies the
+keyless Sigstore bundle against the exact GitHub Actions workflow and tag
+identity before staging proceeds.
 
 Each version has its own immutable directory. Configuration, API token, browser
 profile and audit output remain outside version directories. Before an update,

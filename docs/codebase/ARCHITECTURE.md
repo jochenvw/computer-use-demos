@@ -74,8 +74,9 @@ caller -> authenticated API -> serialized retrieval job
   Entra ID, private gateway controls, and policy enforcement.
 - The plant A2A server remains a separate exposure path, although live execution
   is now blocked by the same `run()` validation.
-- Release integrity depends on GitHub artifact attestation verification through
-  `gh`; private downloads additionally require a short-lived installer token.
+- Release integrity depends on a Sigstore bundle whose certificate identity is
+  the exact GitHub Actions workflow and tag; private downloads additionally
+  require a short-lived installer token.
 
 ### 6) Evidence
 

@@ -2,7 +2,8 @@
 param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'EpicDemo'),
     [string]$Repository = 'jochenvw/computer-use-demos',
-    [switch]$SkipShortcut
+    [switch]$SkipShortcut,
+    [switch]$SkipPrerequisiteInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,15 @@ $launcherRoot = Join-Path $InstallRoot 'launcher'
 $sharedRoot = Join-Path $InstallRoot 'shared'
 foreach ($path in @($launcherRoot, $sharedRoot, (Join-Path $InstallRoot 'releases'), (Join-Path $InstallRoot 'staging'))) {
     New-Item -ItemType Directory -Path $path -Force | Out-Null
+}
+if (-not $SkipPrerequisiteInstall -and -not (Get-Command cosign -ErrorAction SilentlyContinue)) {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw 'Install Sigstore cosign from a trusted package manager before bootstrapping.'
+    }
+    & $winget.Source install --id Sigstore.Cosign --exact --silent `
+        --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) { throw 'Trusted cosign installation through WinGet failed.' }
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Start-EpicDemo.ps1') -Destination $launcherRoot -Force
 
