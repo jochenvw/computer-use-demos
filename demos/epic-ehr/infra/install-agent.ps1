@@ -45,8 +45,12 @@ try {
 }
 $env:UV_PYTHON_INSTALL_DIR = 'C:\DemoTools\python'
 $env:Path = 'C:\DemoTools\uv;C:\DemoTools\devtunnel;' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
-& $uv sync --project $service --python 3.13 --locked --extra test --default-index 'https://pypi.org/simple' --quiet
-if ($LASTEXITCODE -ne 0) { throw 'Agent dependency installation failed.' }
+for ($attempt = 1; $attempt -le 5; $attempt++) {
+    & $uv sync --project $service --python 3.13 --locked --extra test --default-index 'https://pypi.org/simple' --native-tls --quiet
+    if ($LASTEXITCODE -eq 0) { break }
+    if ($attempt -eq 5) { throw 'Agent dependency installation failed after 5 attempts.' }
+    Start-Sleep -Seconds (2 * $attempt)
+}
 $python = Join-Path $service '.venv\Scripts\python.exe'
 $sdkVersion = & $python -c "from importlib.metadata import version; print(version('github-copilot-sdk'))"
 if ($LASTEXITCODE -ne 0) { throw 'The pinned Copilot SDK was not installed.' }
