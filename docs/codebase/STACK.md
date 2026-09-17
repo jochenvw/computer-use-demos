@@ -33,6 +33,7 @@
 | `uv` | Resolve, install, and run Python dependencies | `demos/epic-ehr/service/pyproject.toml` |
 | Python `unittest` | Epic service unit and API tests | `demos/epic-ehr/service/tests/` |
 | Azure CLI Bicep | Validate the Azure VM/Bastion template | `demos/epic-ehr/infra/main.bicep` |
+| GitHub artifact attestations | Publish verifiable `epic-v*` Windows archives | `.github/workflows/epic-release.yml` |
 
 ### 4) Key Commands
 
@@ -43,6 +44,7 @@ uv run --project .\demos\epic-ehr\service epic-agent
 $env:PYTHONPATH = (Resolve-Path .\demos\epic-ehr\service\src).Path
 python -m unittest discover .\demos\epic-ehr\service\tests
 az bicep build --file .\demos\epic-ehr\infra\main.bicep
+.\demos\epic-ehr\release\build-release.ps1 -Tag epic-v0.3.0
 ```
 
 No linter or formatter is configured. `[TODO]`

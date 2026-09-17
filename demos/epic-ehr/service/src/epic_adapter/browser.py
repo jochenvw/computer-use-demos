@@ -95,7 +95,27 @@ class BrowserSession:
     def execute(self, name: str, values: dict) -> None:
         self._check()
         if name == "click":
-            self._page.mouse.click(*self._point(values))
+            x, y = self._point(values)
+            self._page.evaluate(
+                """({x, y}) => {
+                    const previous = document.getElementById("epic-demo-click-marker");
+                    if (previous) previous.remove();
+                    const marker = document.createElement("div");
+                    marker.id = "epic-demo-click-marker";
+                    Object.assign(marker.style, {
+                        position: "fixed", left: `${x - 15}px`, top: `${y - 15}px`,
+                        width: "30px", height: "30px", border: "4px solid #ff1744",
+                        borderRadius: "50%", boxSizing: "border-box",
+                        background: "rgba(255, 23, 68, 0.18)",
+                        pointerEvents: "none", zIndex: "2147483647",
+                        boxShadow: "0 0 0 3px rgba(255,255,255,.9)",
+                    });
+                    document.documentElement.appendChild(marker);
+                    setTimeout(() => marker.remove(), 1200);
+                }""",
+                {"x": x, "y": y},
+            )
+            self._page.mouse.click(x, y)
         elif name == "type_text":
             text = values["text"]
             if not isinstance(text, str) or not 1 <= len(text) <= 256:

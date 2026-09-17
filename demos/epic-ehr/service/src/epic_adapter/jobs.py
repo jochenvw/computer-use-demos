@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -24,6 +26,10 @@ from .progress import emit
 logger = logging.getLogger(__name__)
 
 
+class ServiceDrainingError(RuntimeError):
+    pass
+
+
 class JobService:
     def __init__(
         self,
@@ -44,10 +50,16 @@ class JobService:
         self._jobs: dict[str, JobRecord] = {}
         self._gui_lock = threading.Lock()
         self._records_lock = threading.Lock()
+        self._idle = threading.Condition(self._records_lock)
+        self._accepting = True
 
     def create(self, request: RetrievalRequest, caller_id: str) -> JobRecord:
         job = JobRecord()
-        with self._records_lock:
+        with self._idle:
+            if not self._accepting:
+                raise ServiceDrainingError(
+                    "Service is draining for an update and is not accepting new jobs."
+                )
             pending = sum(
                 item.status in {JobStatus.queued, JobStatus.running}
                 for item in self._jobs.values()
@@ -72,10 +84,39 @@ class JobService:
         return job
 
     def get(self, job_id: str) -> JobRecord:
-        try:
-            return self._jobs[job_id]
-        except KeyError as exc:
-            raise LookupError("Retrieval job was not found.") from exc
+        with self._records_lock:
+            try:
+                return self._jobs[job_id]
+            except KeyError as exc:
+                raise LookupError("Retrieval job was not found.") from exc
+
+    def service_status(self) -> dict[str, int | bool]:
+        with self._records_lock:
+            active = sum(
+                item.status in {JobStatus.queued, JobStatus.running}
+                for item in self._jobs.values()
+            )
+            return {
+                "accepting_jobs": self._accepting,
+                "active_jobs": active,
+                "process_id": os.getpid(),
+            }
+
+    def drain(self, timeout_seconds: float) -> bool:
+        deadline = time.monotonic() + timeout_seconds
+        with self._idle:
+            self._accepting = False
+            while any(
+                item.status in {JobStatus.queued, JobStatus.running}
+                for item in self._jobs.values()
+            ):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    self._accepting = True
+                    self._idle.notify_all()
+                    return False
+                self._idle.wait(remaining)
+            return True
 
     def file_path(self, job_id: str, file_id: str) -> tuple[Path, str]:
         job = self.get(job_id)
@@ -98,7 +139,8 @@ class JobService:
         job = self._jobs[job_id]
         try:
             with self._gui_lock:
-                job.status = JobStatus.running
+                with self._idle:
+                    job.status = JobStatus.running
                 emit(f"JOB {job_id[:8]}  running")
                 key = self._cache.key(request, caller_id, self._backend_scope)
                 if request.bypass_cache:
@@ -149,7 +191,9 @@ class JobService:
                 job.collected_at = entry.collected_at
                 job.expires_at = entry.expires_at
                 job.completed_at = datetime.now(timezone.utc)
-                job.status = JobStatus.complete
+                with self._idle:
+                    job.status = JobStatus.complete
+                    self._idle.notify_all()
                 emit(f"JOB {job_id[:8]}  complete / {len(bundle.resources)} resource(s), {len(bundle.files)} file(s)")
         except Exception as exc:
             job.error = "Retrieval failed. Contact the service operator with the job ID."
@@ -163,7 +207,9 @@ class JobService:
             except OSError:
                 logger.error("Audit persistence failed for job %s", job_id)
             job.completed_at = datetime.now(timezone.utc)
-            job.status = JobStatus.failed
+            with self._idle:
+                job.status = JobStatus.failed
+                self._idle.notify_all()
 
 
 def _observation_has_code(data: dict, codes: set[str]) -> bool:

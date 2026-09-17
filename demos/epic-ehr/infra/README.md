@@ -76,6 +76,14 @@ The API bearer token is generated inside the VM, with file access limited to
 SYSTEM and `demoadmin`. Copilot credentials, devtunnel login and Epic cookies
 are not deployed or embedded in an image.
 
+For ongoing updates after the initial source installation, use the separate
+interactive-user launcher in `..\launcher\`. Versioned `epic-v*` archives are
+attested by GitHub, staged under per-version directories, synthetically tested,
+and activated only after loopback health succeeds. Shared `.env`, audit data and
+browser state remain outside release directories. The launcher drains active
+jobs before stopping its owned API process and restores the previous release
+when activation fails.
+
 Managed Run Command reports its actual execution state and exit code; an ARM
 resource's successful creation alone does not mean a bootstrap script worked.
 Inspect a failed command before retrying. Use a new `-CommandName` for a
@@ -193,7 +201,9 @@ Use that dedicated browser, not an ordinary Edge window; its session is exposed
 only on loopback CDP port 9222. Never tunnel CDP. Configure `EPIC_ORIGIN` as the
 exact approved chart origin (scheme and host, plus port if needed; no path),
 `EPIC_COMPUTER_USE_ENABLED=1`, and `EPIC_BACKEND=copilot` only when the login is
-ready. Restart the agent from a fresh PowerShell process to load the updated
+ready. Also set `EPIC_READY_URL_PREFIX` to the authenticated chart URL prefix;
+redirects to a login page then appear as a readiness failure. Restart the agent
+from a fresh PowerShell process to load the updated
 `.env`, then bypass the cache for an actual browser retrieval.
 Azure Global Standard deployments may process requests outside the account's
 region; use synthetic data for this demo.

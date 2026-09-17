@@ -10,8 +10,9 @@ $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 try {
     # Values in the shell take precedence over local .env entries.
-    if (Test-Path -LiteralPath '.env') {
-        foreach ($line in Get-Content -LiteralPath '.env') {
+    $envFile = if ($env:EPIC_ENV_FILE) { $env:EPIC_ENV_FILE } else { Join-Path $PSScriptRoot '.env' }
+    if (Test-Path -LiteralPath $envFile) {
+        foreach ($line in Get-Content -LiteralPath $envFile) {
             if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
                 $name = $Matches[1]
                 $value = $Matches[2].Trim().Trim('"').Trim("'")

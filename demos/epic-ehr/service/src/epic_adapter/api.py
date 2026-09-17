@@ -13,7 +13,7 @@ from .cache import RetrievalCache
 from .config import Settings
 from .file_catalog import FileCatalog
 from .formats import fhir_bundle, fhir_xml, hl7_oru, ndjson, normalized_json
-from .jobs import JobService
+from .jobs import JobService, ServiceDrainingError
 from .models import JobStatus, OutputFormat, RetrievalRequest
 from .readiness import check_readiness
 
@@ -71,6 +71,36 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/v1/readiness")
+def readiness(caller_id: str = Depends(authorize)) -> dict:
+    del caller_id
+    service = jobs.service_status()
+    checks = {
+        name: {"status": check.status, "detail": check.detail}
+        for name, check in check_readiness(settings).items()
+    }
+    if not service["accepting_jobs"]:
+        checks["api"] = {
+            "status": "not_ready",
+            "detail": "API is draining and is not accepting new retrieval jobs.",
+        }
+    return {"checks": checks, "service": service}
+
+
+@app.post("/v1/admin/drain")
+def drain(
+    timeout_seconds: float = Query(default=60, ge=1, le=300),
+    caller_id: str = Depends(authorize),
+) -> dict:
+    del caller_id
+    if not jobs.drain(timeout_seconds):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Active jobs did not drain before the timeout; job acceptance resumed.",
+        )
+    return {"status": "drained", **jobs.service_status()}
+
+
 @app.post("/v1/retrieval-jobs", status_code=status.HTTP_202_ACCEPTED)
 def create_job(
     payload: RetrievalRequest,
@@ -79,6 +109,8 @@ def create_job(
 ) -> dict[str, str]:
     try:
         job = jobs.create(payload, caller_id)
+    except ServiceDrainingError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     # Relative URLs also work through a tunnel that rewrites Host/proxy headers.

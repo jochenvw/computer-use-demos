@@ -47,7 +47,7 @@ def _cdp_get(url: str) -> dict | list:
 
 
 def _browser_readiness(settings: Settings) -> ReadinessCheck:
-    if settings.backend != "computer-use" or not settings.computer_use_enabled:
+    if settings.backend not in {"copilot", "computer-use"} or not settings.computer_use_enabled:
         return ReadinessCheck("not_applicable", "Browser retrieval is disabled for this backend.")
     cdp = urlsplit(settings.browser_cdp_url)
     if cdp.hostname not in {"127.0.0.1", "localhost"}:
@@ -60,23 +60,29 @@ def _browser_readiness(settings: Settings) -> ReadinessCheck:
 
 
 def _login_readiness(settings: Settings) -> ReadinessCheck:
-    if settings.backend != "computer-use" or not settings.computer_use_enabled:
+    if settings.backend not in {"copilot", "computer-use"} or not settings.computer_use_enabled:
         return ReadinessCheck("not_applicable", "Browser retrieval is disabled for this backend.")
     try:
         targets = _cdp_get(f"{settings.browser_cdp_url}/json/list")
     except (urllib.error.URLError, OSError, ValueError, TimeoutError):
         return ReadinessCheck("not_ready", "Cannot inspect the browser to confirm login.")
-    matches = [
+    origin_matches = [
         target for target in targets
         if isinstance(target, dict) and target.get("type") == "page"
         and origin_of(target.get("url", "")) == origin_of(settings.epic_origin)
     ]
-    if len(matches) != 1:
+    if len(origin_matches) != 1:
         return ReadinessCheck(
             "not_ready",
-            "Exactly one Epic tab must be open and logged in for the approved origin.",
+            "Exactly one Epic tab must be open on the approved origin.",
         )
-    return ReadinessCheck("ready", "An Epic tab is open on the approved origin.")
+    current_url = origin_matches[0].get("url", "")
+    if not current_url.startswith(settings.epic_ready_url_prefix):
+        return ReadinessCheck(
+            "not_ready",
+            "The Epic tab is not on the configured authenticated chart URL prefix.",
+        )
+    return ReadinessCheck("ready", "The Epic tab is on the authenticated chart URL prefix.")
 
 
 def check_readiness(settings: Settings) -> dict[str, ReadinessCheck]:

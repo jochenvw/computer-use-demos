@@ -143,6 +143,7 @@ account. Keep that agent's model selection separate.
    EPIC_BACKEND=copilot
    EPIC_COMPUTER_USE_ENABLED=1
    EPIC_ORIGIN=https://your-authorized-epic-host
+   EPIC_READY_URL_PREFIX=https://your-authorized-epic-host/chart
    EPIC_BROWSER_CDP_URL=http://127.0.0.1:9222
    MODEL_DEPLOYMENT=gpt-6-astra
    ```
@@ -159,6 +160,8 @@ requested resource types. Session expiry or uncertain identity produces a failed
 job, not invented data. Sessions are aborted, disconnected, deleted and their
 temporary CLI homes removed after execution. The CLI can write temporary
 session data during a request; use only synthetic data on an approved host.
+Each click displays a temporary red ring in the visible browser before the
+Playwright action, so the RDP/Bastion presenter can follow computer use.
 Provider processing/retention policies still apply. Each skill has an action
 budget (`EPIC_MAX_BROWSER_STEPS`, default 40) and timeout
 (`EPIC_SKILL_TIMEOUT_SECONDS`, default 180).
@@ -278,6 +281,38 @@ exit. Fixture mode remains the safe default. `bypass_cache` intentionally
 causes live skill work only in the Copilot backend, so use it only after the
 manual authorized browser login.
 
+## Versioned release and desktop launcher
+
+Tagged `epic-v*` releases run the Windows service tests, build the wheel and a
+locked release archive, publish the archive to GitHub Releases, and attach a
+GitHub build-provenance attestation. The archive contains tracked source,
+synthetic fixtures, the dependency lock and a commit/tag manifest; it excludes
+local `.env`, browser profiles, audit output, screenshots, downloads and virtual
+environments.
+
+Install the launcher separately in the interactive Windows account:
+
+```powershell
+cd .\demos\epic-ehr\launcher
+.\Bootstrap-EpicDemo.ps1
+.\Start-EpicDemo.ps1 -Mode InstallVersion -Version epic-v0.3.0
+```
+
+Bootstrap is idempotent and creates **Start Epic Demo** on that user's desktop.
+The launcher supports an exact selected tag, an operator-reviewed channel
+mapping, or the already-installed version. It never selects the newest release
+implicitly. Private release downloads use `EPIC_RELEASE_GITHUB_TOKEN` only from
+the installing process; the token is not persisted. `gh attestation verify`
+must trust the GitHub repository identity before staging proceeds.
+
+Each version has its own immutable directory. Configuration, API token, browser
+profile and audit output remain outside version directories. Before an update,
+the launcher calls the authenticated drain endpoint: new jobs stop, active jobs
+finish, and a timeout resumes acceptance and cancels the update. The candidate
+must restore locked dependencies and pass a synthetic API retrieval. Activation
+must pass loopback health; otherwise the previous working version is restarted.
+Running an installed version does not contact GitHub.
+
 ## API and output formats
 
 | Method | Path | Purpose |
@@ -292,6 +327,8 @@ manual authorized browser login.
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=ndjson` | Normalized resource lines |
 | GET | `/v1/retrieval-jobs/{job_id}/files/{file_id}` | Original file, reverified before download |
 | GET | `/healthz` | Process health only |
+| GET | `/v1/readiness` | Authenticated API/files/browser/login and active-job readiness |
+| POST | `/v1/admin/drain?timeout_seconds=60` | Authenticated update drain; timeout resumes acceptance |
 
 FHIR output preserves recorded quantities/components; it is an illustrative
 mapping, not validated FHIR profile conformance. NDJSON contains clinical

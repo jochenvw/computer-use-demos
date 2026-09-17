@@ -11,6 +11,7 @@
 | High | Retrieval results and files are held in process memory and served by opaque IDs | `demos/epic-ehr/service/src/epic_adapter/jobs.py` | Restart loses jobs; multi-worker deployment breaks consistency | Use a durable encrypted job store and scoped authorization before production |
 | Medium | Plant A2A HTTP server has no application authentication | `demos/plant-operations/agent/a2a_server.py` | Network clients could trigger work if explicitly exposed | Keep the localhost default and add auth before remote exposure |
 | Medium | No actual Epic/model acceptance test | `docs/codebase/TESTING.md` | Real workflow failures may escape synthetic tests | Add authorized training-environment acceptance before clinical deployment |
+| Medium | New version installation depends on GitHub and attestation CLI availability | `demos/epic-ehr/launcher/Start-EpicDemo.ps1` | A release cannot be newly installed during an outage | Retain tested versions locally; `RunInstalled` is offline |
 | Low | Plant chart transitive packages produce `NU1701` warnings | `demos/plant-operations/app/plant_manager.csproj`; build output | Future framework updates may break chart rendering | Upgrade or replace the release-candidate chart package |
 
 ### 2) Technical Debt
@@ -38,6 +39,7 @@
 | Original file download shares the API process | `api.py` | Fine for small synthetic ECG files | Large DICOM/PDF downloads consume API worker capacity | Offload authorized downloads to encrypted object storage or a streaming tier |
 | Single GUI lock serializes all jobs | `jobs.py` | One job at a time | Queue latency grows with callers | Keep one GUI worker per desktop session and scale through partitioned workers |
 | Cache and job store are process-local | `cache.py`, `jobs.py` | Fine for a single synthetic demo process | Restart loses state; cache byte bound is not a total process-memory cap | Use durable encrypted stores and explicit retention limits before production |
+| Release state is single-user and JSON-backed | `launcher/Start-EpicDemo.ps1` | Appropriate for one interactive RDP account | Concurrent Windows users have independent state | Keep one approved demo account or add a machine-wide broker with explicit ACLs |
 
 ### 5) Fragile/High-Churn Areas
 
@@ -59,3 +61,5 @@ None remaining. The user chose to defer adding a license.
 - `demos/epic-ehr/service/src/epic_adapter/jobs.py`
 - `demos/epic-ehr/service/src/epic_adapter/file_catalog.py`
 - `demos/plant-operations/app/plant_manager.csproj`
+- `.github/workflows/epic-release.yml`
+- `demos/epic-ehr/launcher/Start-EpicDemo.ps1`

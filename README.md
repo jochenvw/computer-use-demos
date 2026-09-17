@@ -57,6 +57,8 @@ demos/
   epic-ehr/
     service/   Terminal/API, Astra browser worker, local files, tunnel launcher, tests
     infra/     Azure VM and Bastion Bicep template
+    launcher/  Separate version selector, installer, rollback, and desktop shortcut
+    release/   Reproducible versioned release archive builder
     fixtures/  Synthetic patient and diagnostic-file metadata
 docs/codebase/ Architecture and maintenance notes
 scripts/       Optional local helper scripts

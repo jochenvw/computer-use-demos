@@ -15,7 +15,7 @@ os.environ["EPIC_AUDIT_PATH"] = str(
 
 from fastapi.testclient import TestClient
 
-from epic_adapter.api import adapter, app
+from epic_adapter.api import adapter, app, jobs
 
 
 class ApiTests(unittest.TestCase):
@@ -202,6 +202,25 @@ class ApiTests(unittest.TestCase):
 
     def test_health_does_not_expose_backend(self):
         self.assertEqual({"status": "ok"}, self.client.get("/healthz").json())
+
+    def test_authenticated_readiness_is_independent_and_reports_jobs(self):
+        response = self.client.get("/v1/readiness", headers=self.headers)
+        self.assertEqual(200, response.status_code)
+        payload = response.json()
+        self.assertEqual("ready", payload["checks"]["api"]["status"])
+        self.assertEqual("ready", payload["checks"]["files"]["status"])
+        self.assertEqual("not_applicable", payload["checks"]["browser"]["status"])
+        self.assertIn("accepting_jobs", payload["service"])
+        self.assertGreater(payload["service"]["process_id"], 0)
+        self.assertEqual(401, self.client.get("/v1/readiness").status_code)
+
+    def test_drain_timeout_is_explicit_and_resumes_acceptance(self):
+        with patch.object(jobs, "drain", return_value=False):
+            response = self.client.post(
+                "/v1/admin/drain?timeout_seconds=1", headers=self.headers,
+            )
+        self.assertEqual(409, response.status_code)
+        self.assertIn("acceptance resumed", response.json()["detail"])
 
 
 if __name__ == "__main__":

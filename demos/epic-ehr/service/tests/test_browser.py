@@ -24,6 +24,13 @@ class BrowserGuardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.session.execute("click", {"x": -1, "y": 10})
 
+    def test_click_adds_visible_marker_before_browser_action(self):
+        self.session.execute("click", {"x": 40, "y": 50})
+        marker_call = self.page.evaluate.call_args_list[1]
+        self.assertIn("epic-demo-click-marker", marker_call.args[0])
+        self.assertEqual({"x": 40, "y": 50}, marker_call.args[1])
+        self.page.mouse.click.assert_called_once_with(40, 50)
+
     def test_shortcuts_are_rejected(self):
         with self.assertRaises(ValueError):
             self.session.execute("press_key", {"key": "Control+L"})
