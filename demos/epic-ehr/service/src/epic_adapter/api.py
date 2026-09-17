@@ -9,9 +9,10 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from .adapters.computer_use import ComputerUseEpicAdapter
 from .adapters.fixture import FixtureEpicAdapter
 from .audit import AuditWriter
+from .cache import RetrievalCache
 from .config import Settings
 from .file_catalog import FileCatalog
-from .formats import fhir_bundle, ndjson, normalized_json
+from .formats import fhir_bundle, fhir_xml, hl7_oru, ndjson, normalized_json
 from .jobs import JobService
 from .models import JobStatus, OutputFormat, RetrievalRequest
 from .readiness import check_readiness
@@ -20,13 +21,23 @@ settings = Settings.from_env()
 settings.validate()
 adapter = (
     ComputerUseEpicAdapter(settings)
-    if settings.backend == "computer-use"
+    if settings.backend in {"copilot", "computer-use"}
     else FixtureEpicAdapter(settings.fixture_root)
 )
 jobs = JobService(
     adapter=adapter,
     file_catalog=FileCatalog(settings.file_roots),
     audit=AuditWriter(settings.audit_path),
+    cache=RetrievalCache(
+        max_entries=settings.cache_max_entries, ttl_seconds=settings.cache_ttl_seconds,
+        max_bytes=settings.cache_max_bytes,
+    ),
+    backend_scope=settings.backend,
+    file_retriever=(
+        lambda patient_id, resources, catalog: adapter.runner.retrieve(
+            "local-files", patient_id, resources, catalog,
+        )
+    ) if isinstance(adapter, ComputerUseEpicAdapter) else None,
 )
 app = FastAPI(
     title="Epic EHR Data Adapter Demo",
@@ -94,7 +105,7 @@ def get_result(
     job_id: str,
     request: Request,
     output_format: OutputFormat = Query(
-        default=OutputFormat.json, alias="format"
+        default=OutputFormat.fhir, alias="format"
     ),
     caller_id: str = Depends(authorize),
 ) -> Response:
@@ -107,14 +118,29 @@ def get_result(
         raise HTTPException(status_code=409, detail=f"Job is {job.status.value}.")
 
     base = f"/v1/retrieval-jobs/{job_id}"
-    if output_format == OutputFormat.fhir:
-        return JSONResponse(
-            fhir_bundle(job.bundle, base),
-            media_type="application/fhir+json",
-        )
-    if output_format == OutputFormat.ndjson:
-        return Response(ndjson(job.bundle), media_type="application/x-ndjson")
-    return JSONResponse(normalized_json(job.bundle, base))
+    headers = {
+        "Cache-Control": "no-store",
+        "X-Retrieval-Cache": job.cache_status or "miss",
+        "X-Collected-At": job.collected_at.isoformat() if job.collected_at else "",
+        "X-Cache-Expires-At": job.expires_at.isoformat() if job.expires_at else "",
+    }
+    try:
+        if output_format == OutputFormat.fhir:
+            return JSONResponse(
+                fhir_bundle(job.bundle, base),
+                media_type="application/fhir+json", headers=headers,
+            )
+        if output_format == OutputFormat.fhir_xml:
+            return Response(fhir_xml(job.bundle, base), media_type="application/fhir+xml", headers=headers)
+        if output_format == OutputFormat.hl7:
+            return Response(hl7_oru(job.bundle), media_type="application/hl7-v2", headers=headers)
+        if output_format == OutputFormat.ndjson:
+            return Response(ndjson(job.bundle), media_type="application/x-ndjson", headers=headers)
+        return JSONResponse(normalized_json(job.bundle, base), headers=headers)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="Retrieved data cannot be represented in the requested format.",
+        ) from exc
 
 
 @app.get("/v1/retrieval-jobs/{job_id}/files/{file_id}")

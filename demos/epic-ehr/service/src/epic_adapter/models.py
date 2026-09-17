@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -20,6 +20,8 @@ class OutputFormat(str, Enum):
     json = "json"
     fhir = "fhir"
     ndjson = "ndjson"
+    fhir_xml = "fhir-xml"
+    hl7 = "hl7"
 
 
 class RetrievalSource(str, Enum):
@@ -36,6 +38,10 @@ class RetrievalRequest(BaseModel):
     resources: list[ResourceType] = Field(
         default_factory=lambda: list(ResourceType), min_length=1, max_length=5
     )
+    observation_codes: list[Annotated[str, Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9.-]+$",
+    )]] = Field(default_factory=list, max_length=32)
+    bypass_cache: bool = False
 
 
 class SourceRecord(BaseModel):
@@ -74,6 +80,12 @@ class JobStatus(str, Enum):
     failed = "failed"
 
 
+class CacheStatus(str, Enum):
+    hit = "hit"
+    miss = "miss"
+    bypass = "bypass"
+
+
 class JobRecord(BaseModel):
     job_id: str = Field(default_factory=lambda: uuid4().hex)
     status: JobStatus = JobStatus.queued
@@ -82,4 +94,7 @@ class JobRecord(BaseModel):
     )
     completed_at: datetime | None = None
     error: str | None = None
+    cache_status: CacheStatus | None = None
+    collected_at: datetime | None = None
+    expires_at: datetime | None = None
     bundle: ClinicalBundle | None = Field(default=None, exclude=True)

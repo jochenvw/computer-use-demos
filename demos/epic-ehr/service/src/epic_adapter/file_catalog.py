@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import mimetypes
 import re
+from io import BytesIO
 from pathlib import Path
 
 from .models import FileRecord
@@ -18,6 +19,9 @@ ALLOWED_EXTENSIONS = {
     ".xml": "application/xml",
 }
 SAFE_PATIENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+MAX_SKILL_READ_BYTES = 4 * 1024 * 1024
+MAX_PDF_PAGES = 50
+MAX_SKILL_TEXT_CHARS = 100_000
 
 
 class FileCatalog:
@@ -63,13 +67,7 @@ class FileCatalog:
 
     def verify(self, record: FileRecord, patient_id: str) -> Path:
         """Recheck containment and content before serving a previously cataloged file."""
-        resolved = Path(record.path).resolve(strict=True)
-        if not any(
-            (root / patient_id).resolve() in resolved.parents
-            and root in (root / patient_id).resolve().parents
-            for root in self._roots
-        ):
-            raise RuntimeError("File no longer belongs to an approved patient directory.")
+        resolved = self._contained_path(record, patient_id)
         digest = hashlib.sha256()
         with resolved.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -77,3 +75,40 @@ class FileCatalog:
         if digest.hexdigest() != record.sha256:
             raise RuntimeError("File changed after retrieval; request a new job.")
         return resolved
+
+    def _contained_path(self, record: FileRecord, patient_id: str) -> Path:
+        resolved = Path(record.path).resolve(strict=True)
+        if any(
+            (root / patient_id).resolve() in resolved.parents
+            and root in (root / patient_id).resolve().parents
+            for root in self._roots
+        ):
+            return resolved
+        raise RuntimeError("File no longer belongs to an approved patient directory.")
+
+    def open_for_skill(self, record: FileRecord, patient_id: str) -> tuple[str | None, bytes | None]:
+        path = self._contained_path(record, patient_id)
+        with path.open("rb") as stream:
+            data = stream.read(MAX_SKILL_READ_BYTES + 1)
+        if len(data) > MAX_SKILL_READ_BYTES:
+            raise ValueError("File exceeds the skill's 4 MiB read limit; original download is available.")
+        if hashlib.sha256(data).hexdigest() != record.sha256:
+            raise RuntimeError("File changed while being opened.")
+        if record.media_type in {"image/png", "image/jpeg"}:
+            return None, data
+        if record.media_type in {"application/json", "application/xml"}:
+            text = data.decode("utf-8-sig")
+        elif record.media_type == "application/pdf":
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(data), strict=True)
+            if reader.is_encrypted or len(reader.pages) > MAX_PDF_PAGES:
+                raise ValueError("Encrypted PDFs and PDFs over 50 pages are not supported.")
+            text = "\n".join(page.extract_text() for page in reader.pages)
+            if not text.strip():
+                raise ValueError("PDF has no extractable text; OCR is not implemented.")
+        else:
+            return None, None
+        if len(text) > MAX_SKILL_TEXT_CHARS:
+            raise ValueError("Document text exceeds the skill read limit.")
+        return text, None

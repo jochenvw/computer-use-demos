@@ -15,17 +15,21 @@
 
 ```text
 caller -> authenticated API -> serialized retrieval job
-       -> files / EHR / both (EHR: fixture OR Astra screenshots + browser function tools)
-       -> normalized clinical bundle -> JSON/FHIR/NDJSON/original file
+       -> files / EHR / both (fixture OR selected Copilot CLI skill)
+       -> cached normalized clinical bundle
+       -> FHIR JSON/XML, limited HL7 ORU, normalized JSON/NDJSON, original file
 ```
 
 1. The API authenticates the caller and accepts a patient-scoped retrieval.
 2. `JobService` creates an opaque job and serializes work through a GUI lock.
-3. The configured EHR adapter returns normalized read-only resources.
-4. `FileCatalog` searches only configured roots and allowlisted extensions.
-5. The service combines both sources into a `ClinicalBundle`.
-6. Result endpoints render normalized JSON, FHIR R4-style Bundle, NDJSON, or a
-   job-scoped original file.
+3. The configured adapter returns synthetic fixtures or starts an isolated
+   empty-mode Copilot CLI session with one packaged `SKILL.md`.
+4. `FileCatalog` searches only configured roots and allowlisted extensions; in
+   Copilot mode the `local-files` skill must list/open handles before extracting.
+5. The service combines both sources into a format-neutral `ClinicalBundle` and
+   may reuse a caller/backend/patient/source/resource/filter cache hit.
+6. Result endpoints render default FHIR JSON, FHIR XML, limited HL7 ORU,
+   normalized JSON/NDJSON, or a job-scoped original file.
 
 ### 3) Layer/Module Responsibilities
 
@@ -34,11 +38,12 @@ caller -> authenticated API -> serialized retrieval job
 | Epic API | Authentication and HTTP representation | Browser credentials or GUI details | `demos/epic-ehr/service/src/epic_adapter/api.py` |
 | Job service | Lifecycle, serialization, bundle assembly, audit events | Format-specific rendering | `demos/epic-ehr/service/src/epic_adapter/jobs.py` |
 | EHR adapters | Read-only source retrieval | API authentication or file downloads | `demos/epic-ehr/service/src/epic_adapter/adapters/` |
+| Skill runner | SDK lifecycle, selected skill copy, custom tool allowlist, cleanup | Generic shell/filesystem/MCP/plugin access | `demos/epic-ehr/service/src/epic_adapter/skill_runner.py` |
 | BrowserSession | Exact-origin CDP attachment, screenshots, bounded UI actions | Desktop input, arbitrary URLs or shortcuts | `demos/epic-ehr/service/src/epic_adapter/browser.py` |
 | Console | Red ASCII cross, sanitized lifecycle and action events | Clinical content or credentials | `demos/epic-ehr/service/src/epic_adapter/console.py` |
 | Tunnel launcher | Optional authenticated outbound forwarding of API port | Anonymous access or forwarding CDP port | `demos/epic-ehr/service/tunnel.ps1` |
 | File catalog | Patient-scoped allowlisted local files | Arbitrary filesystem access | `demos/epic-ehr/service/src/epic_adapter/file_catalog.py` |
-| Formatters | JSON, FHIR-style Bundle, NDJSON | Source retrieval | `demos/epic-ehr/service/src/epic_adapter/formats.py` |
+| Formatters | FHIR JSON/XML, limited HL7 ORU, normalized JSON/NDJSON | Source retrieval or full FHIR profile validation | `demos/epic-ehr/service/src/epic_adapter/formats.py` |
 | Bicep | Private Windows VM, custom image, Bastion, NSG | Epic/browser session state | `demos/epic-ehr/infra/main.bicep` |
 
 ### 4) Reused Patterns
@@ -49,16 +54,19 @@ caller -> authenticated API -> serialized retrieval job
 | MVVM | Plant app models, engine, and ViewModel | Keeps telemetry state separate from WPF controls |
 | Adapter | `EhrAdapter`, fixture adapter, computer-use adapter | Keeps API callers independent of retrieval mechanism |
 | Opaque job | Epic API and `JobService` | Hides long-running serialized GUI work from callers |
-| Allowlist | Epic `FileCatalog` | Prevents arbitrary filesystem retrieval |
+| Allowlist | Epic `FileCatalog` and `CopilotSkillRunner` | Prevents arbitrary filesystem retrieval and unmanaged runtime tools |
 
 ### 5) Known Architectural Risks
 
-- Astra browser automation is implemented; actual hospital navigation and
+- Copilot browser automation is implemented; actual hospital navigation and
   model deployment remain unverified. An authorized read-only Epic account is
   mandatory because origin/action restrictions cannot enforce click semantics.
-- `files` never calls EHR/model; `ehr` never searches local files; `both` requires
-  both operations to succeed. One GUI lock serializes worker activity.
+- In fixture mode `files` uses only the local catalog. In Copilot mode `files`
+  uses the packaged local-file skill, but never EHR browser navigation; `ehr`
+  never searches local files; `both` requires both operations to succeed.
 - The in-memory job store loses state on process restart and supports one process.
+- The retrieval cache is a small in-process LRU/TTL cache, not a durable result
+  store or total process memory cap.
 - Bearer-token authentication is suitable only for the demo; production requires
   Entra ID, private gateway controls, and policy enforcement.
 - The plant A2A server remains a separate exposure path, although live execution
