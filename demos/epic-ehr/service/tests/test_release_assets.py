@@ -25,6 +25,9 @@ class ReleaseAssetTests(unittest.TestCase):
         bootstrap = (
             ROOT / "demos/epic-ehr/launcher/Bootstrap-EpicDemo.ps1"
         ).read_text(encoding="utf-8")
+        installer = (
+            ROOT / "demos/epic-ehr/infra/install-agent.ps1"
+        ).read_text(encoding="utf-8")
         self.assertIn("cosign verify-blob", launcher)
         self.assertIn("--certificate-identity", launcher)
         self.assertIn("cosign-windows-amd64", launcher)
@@ -35,6 +38,8 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertNotIn("$LASTEXITCODE -ne 0", bootstrap)
         self.assertIn("--native-tls", launcher)
         self.assertIn("$attempt -le 5", launcher)
+        self.assertIn("--native-tls", installer)
+        self.assertIn("$attempt -le 5", installer)
         self.assertIn("/v1/admin/drain", launcher)
         self.assertIn("Approved channel", launcher)
         self.assertNotIn("/releases/latest", launcher)
