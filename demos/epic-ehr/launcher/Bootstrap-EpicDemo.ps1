@@ -12,7 +12,9 @@ $sharedRoot = Join-Path $InstallRoot 'shared'
 foreach ($path in @($launcherRoot, $sharedRoot, (Join-Path $InstallRoot 'releases'), (Join-Path $InstallRoot 'staging'))) {
     New-Item -ItemType Directory -Path $path -Force | Out-Null
 }
-if (-not $SkipPrerequisiteInstall -and -not (Get-Command cosign -ErrorAction SilentlyContinue)) {
+$cosign = Get-Command cosign, cosign-windows-amd64 -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $SkipPrerequisiteInstall -and -not $cosign) {
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $winget) {
         throw 'Install Sigstore cosign from a trusted package manager before bootstrapping.'

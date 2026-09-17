@@ -24,6 +24,7 @@ class ReleaseAssetTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("cosign verify-blob", launcher)
         self.assertIn("--certificate-identity", launcher)
+        self.assertIn("cosign-windows-amd64", launcher)
         self.assertIn("/v1/admin/drain", launcher)
         self.assertIn("Approved channel", launcher)
         self.assertNotIn("/releases/latest", launcher)

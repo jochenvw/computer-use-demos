@@ -42,6 +42,19 @@ function Get-CurrentTag {
     return (Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json).tag
 }
 
+function Get-CosignPath {
+    foreach ($name in @('cosign', 'cosign-windows-amd64')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) { return $command.Source }
+    }
+    $links = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+    foreach ($name in @('cosign.exe', 'cosign-windows-amd64.exe')) {
+        $candidate = Join-Path $links $name
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    throw 'Sigstore cosign is not installed or discoverable.'
+}
+
 function Stop-ActiveDemoForUpdate {
     if (-not (Test-Path -LiteralPath $sessionPath)) { return }
     $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
@@ -149,7 +162,7 @@ function Install-Release([string]$Tag) {
         $downloadHeaders.Accept = 'application/octet-stream'
         Invoke-WebRequest -UseBasicParsing -Uri $asset[0].url -Headers $downloadHeaders -OutFile $archive
         Invoke-WebRequest -UseBasicParsing -Uri $bundleAsset[0].url -Headers $downloadHeaders -OutFile $bundle
-        $cosign = (Get-Command cosign -ErrorAction Stop).Source
+        $cosign = Get-CosignPath
         $identity = "https://github.com/$Repository/.github/workflows/epic-release.yml@refs/tags/$Tag"
         & $cosign verify-blob --bundle $bundle `
             --certificate-identity $identity `
