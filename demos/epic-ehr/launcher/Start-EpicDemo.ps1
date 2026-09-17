@@ -141,13 +141,21 @@ function Install-Release([string]$Tag) {
         $assetName = "epic-ehr-$Tag-windows-x64.zip"
         $asset = @($release.assets | Where-Object name -eq $assetName)
         if ($asset.Count -ne 1) { throw "Release $Tag does not contain $assetName." }
+        $bundleAsset = @($release.assets | Where-Object name -eq "$assetName.sigstore.json")
+        if ($bundleAsset.Count -ne 1) { throw "Release $Tag does not contain its Sigstore bundle." }
         $archive = Join-Path $staging $assetName
+        $bundle = "$archive.sigstore.json"
         $downloadHeaders = $headers.Clone()
         $downloadHeaders.Accept = 'application/octet-stream'
         Invoke-WebRequest -UseBasicParsing -Uri $asset[0].url -Headers $downloadHeaders -OutFile $archive
-        $gh = (Get-Command gh -ErrorAction Stop).Source
-        & $gh attestation verify $archive --repo $Repository
-        if ($LASTEXITCODE -ne 0) { throw 'GitHub artifact attestation verification failed.' }
+        Invoke-WebRequest -UseBasicParsing -Uri $bundleAsset[0].url -Headers $downloadHeaders -OutFile $bundle
+        $cosign = (Get-Command cosign -ErrorAction Stop).Source
+        $identity = "https://github.com/$Repository/.github/workflows/epic-release.yml@refs/tags/$Tag"
+        & $cosign verify-blob --bundle $bundle `
+            --certificate-identity $identity `
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
+            $archive
+        if ($LASTEXITCODE -ne 0) { throw 'Sigstore workflow-identity verification failed.' }
         $content = Join-Path $staging 'content'
         Expand-Archive -LiteralPath $archive -DestinationPath $content
         $manifest = Get-Content -LiteralPath (Join-Path $content 'release-manifest.json') -Raw | ConvertFrom-Json

@@ -14,7 +14,6 @@ on:
 permissions:
   contents: write
   id-token: write
-  attestations: write
 
 jobs:
   release:
@@ -44,10 +43,13 @@ jobs:
         run: |
           .\demos\epic-ehr\release\build-release.ps1 -Tag $env:RELEASE_TAG -OutputDirectory .\dist
 
-      - name: Attest release archive
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-path: dist/epic-ehr-${{ env.RELEASE_TAG }}-windows-x64.zip
+      - uses: sigstore/cosign-installer@v3.10.0
+
+      - name: Sign release archive with GitHub OIDC
+        shell: pwsh
+        run: |
+          $archive = ".\dist\epic-ehr-$env:RELEASE_TAG-windows-x64.zip"
+          cosign sign-blob --yes --bundle "$archive.sigstore.json" $archive
 
       - name: Publish GitHub release
         shell: pwsh
@@ -55,9 +57,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $archive = ".\dist\epic-ehr-$env:RELEASE_TAG-windows-x64.zip"
+          $bundle = "$archive.sigstore.json"
           gh release view $env:RELEASE_TAG 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:RELEASE_TAG $archive --clobber
+            gh release upload $env:RELEASE_TAG $archive $bundle --clobber
           } else {
-            gh release create $env:RELEASE_TAG $archive --verify-tag --generate-notes --title "Epic Retrieval Agent $env:RELEASE_TAG"
+            gh release create $env:RELEASE_TAG $archive $bundle --verify-tag --generate-notes --title "Epic Retrieval Agent $env:RELEASE_TAG"
           }

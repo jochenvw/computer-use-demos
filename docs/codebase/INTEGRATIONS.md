@@ -12,7 +12,7 @@
 | Optional Azure BYOM model | OpenAI-compatible endpoint | Model backend for the isolated Copilot runtime | Entra ID bearer token from `DefaultAzureCredential`; no Azure API keys | High | `demos/epic-ehr/service/src/epic_adapter/skill_runner.py` |
 | Microsoft dev tunnels | Outbound HTTPS forwarding | Synthetic demo API access without inbound firewall rule | Tunnel owner identity/connect token AND API bearer token | Optional | `demos/epic-ehr/service/tunnel.ps1` |
 | Azure Bastion | Managed Azure service | Administrative access to private desktop VM | Azure RBAC | High | `demos/epic-ehr/infra/main.bicep` |
-| GitHub Releases and attestations | HTTPS / `gh` CLI | Exact-version archive download and repository-identity verification | Installer-process token for private releases; GitHub attestation identity | High | `.github/workflows/epic-release.yml`, `demos/epic-ehr/launcher/Start-EpicDemo.ps1` |
+| GitHub Releases and Sigstore | HTTPS / `cosign` | Exact-version archive download and GitHub workflow/tag identity verification | Installer-process token for private releases; GitHub OIDC certificate identity | High | `.github/workflows/epic-release.yml`, `demos/epic-ehr/launcher/Start-EpicDemo.ps1` |
 | Plant A2A server | HTTP/JSON-RPC | Expose the plant agent to A2A clients | No application auth is present | Medium | `demos/plant-operations/agent/a2a_server.py` |
 
 ### 2) Data Stores
