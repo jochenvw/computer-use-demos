@@ -22,9 +22,19 @@ class ReleaseAssetTests(unittest.TestCase):
         launcher = (
             ROOT / "demos/epic-ehr/launcher/Start-EpicDemo.ps1"
         ).read_text(encoding="utf-8")
+        bootstrap = (
+            ROOT / "demos/epic-ehr/launcher/Bootstrap-EpicDemo.ps1"
+        ).read_text(encoding="utf-8")
         self.assertIn("cosign verify-blob", launcher)
         self.assertIn("--certificate-identity", launcher)
         self.assertIn("cosign-windows-amd64", launcher)
+        self.assertIn(r"Microsoft\WinGet\Links", bootstrap)
+        self.assertIn("Sigstore.Cosign_*", launcher)
+        self.assertIn("Sigstore.Cosign_*", bootstrap)
+        self.assertIn("$cosign = Get-CosignPath", bootstrap)
+        self.assertNotIn("$LASTEXITCODE -ne 0", bootstrap)
+        self.assertIn("--native-tls", launcher)
+        self.assertIn("$attempt -le 5", launcher)
         self.assertIn("/v1/admin/drain", launcher)
         self.assertIn("Approved channel", launcher)
         self.assertNotIn("/releases/latest", launcher)

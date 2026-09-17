@@ -52,6 +52,11 @@ function Get-CosignPath {
         $candidate = Join-Path $links $name
         if (Test-Path -LiteralPath $candidate) { return $candidate }
     }
+    $packages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    foreach ($package in Get-ChildItem -LiteralPath $packages -Directory -Filter 'Sigstore.Cosign_*' -ErrorAction SilentlyContinue) {
+        $candidate = Join-Path $package.FullName 'cosign-windows-amd64.exe'
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
     throw 'Sigstore cosign is not installed or discoverable.'
 }
 
@@ -84,8 +89,12 @@ function Test-Release([string]$ReleaseRoot) {
     $service = Join-Path $ReleaseRoot 'demos\epic-ehr\service'
     $fixtures = Join-Path $ReleaseRoot 'demos\epic-ehr\fixtures'
     $uv = (Get-Command uv -ErrorAction Stop).Source
-    & $uv sync --project $service --python 3.13 --locked --extra test --default-index 'https://pypi.org/simple' --quiet
-    if ($LASTEXITCODE -ne 0) { throw 'Release dependency installation failed.' }
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        & $uv sync --project $service --python 3.13 --locked --extra test --default-index 'https://pypi.org/simple' --native-tls --quiet
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -eq 5) { throw 'Release dependency installation failed after 5 attempts.' }
+        Start-Sleep -Seconds (2 * $attempt)
+    }
     $python = Join-Path $service '.venv\Scripts\python.exe'
     $testPort = 18000 + (Get-Random -Minimum 0 -Maximum 1000)
     $previous = @{

@@ -12,8 +12,26 @@ $sharedRoot = Join-Path $InstallRoot 'shared'
 foreach ($path in @($launcherRoot, $sharedRoot, (Join-Path $InstallRoot 'releases'), (Join-Path $InstallRoot 'staging'))) {
     New-Item -ItemType Directory -Path $path -Force | Out-Null
 }
-$cosign = Get-Command cosign, cosign-windows-amd64 -ErrorAction SilentlyContinue |
-    Select-Object -First 1
+
+function Get-CosignPath {
+    foreach ($name in @('cosign', 'cosign-windows-amd64')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) { return $command.Source }
+    }
+    $links = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+    foreach ($name in @('cosign.exe', 'cosign-windows-amd64.exe')) {
+        $candidate = Join-Path $links $name
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    $packages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    foreach ($package in Get-ChildItem -LiteralPath $packages -Directory -Filter 'Sigstore.Cosign_*' -ErrorAction SilentlyContinue) {
+        $candidate = Join-Path $package.FullName 'cosign-windows-amd64.exe'
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    return $null
+}
+
+$cosign = Get-CosignPath
 if (-not $SkipPrerequisiteInstall -and -not $cosign) {
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $winget) {
@@ -21,7 +39,8 @@ if (-not $SkipPrerequisiteInstall -and -not $cosign) {
     }
     & $winget.Source install --id Sigstore.Cosign --exact --silent `
         --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) { throw 'Trusted cosign installation through WinGet failed.' }
+    $cosign = Get-CosignPath
+    if (-not $cosign) { throw 'Trusted cosign installation through WinGet failed.' }
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Start-EpicDemo.ps1') -Destination $launcherRoot -Force
 
