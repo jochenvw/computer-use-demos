@@ -5,7 +5,8 @@ Azure AI Foundry to discover capabilities and invoke this agent via
 the Agent-to-Agent (A2A) protocol.
 """
 
-from a2a.types import AgentCard, AgentCapabilities, AgentSkill
+from a2a.types import AgentCard, AgentCapabilities, AgentInterface, AgentSkill
+from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
 
 
 def build_agent_card(host: str = "localhost", port: int = 10100) -> AgentCard:
@@ -65,7 +66,6 @@ def build_agent_card(host: str = "localhost", port: int = 10100) -> AgentCard:
     capabilities = AgentCapabilities(
         streaming=False,
         push_notifications=False,
-        state_transition_history=True,
     )
 
     return AgentCard(
@@ -78,7 +78,13 @@ def build_agent_card(host: str = "localhost", port: int = 10100) -> AgentCard:
             "computer-use-preview model."
         ),
         version="0.1.0",
-        url=f"http://{host}:{port}/",
+        supported_interfaces=[
+            AgentInterface(
+                url=f"http://{host}:{port}/",
+                protocol_binding=TransportProtocol.JSONRPC,
+                protocol_version=PROTOCOL_VERSION_CURRENT,
+            ),
+        ],
         skills=skills,
         capabilities=capabilities,
         default_input_modes=["text", "text/plain"],

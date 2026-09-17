@@ -22,7 +22,7 @@ not an Epic Systems or humanitarian organization product.
 
 ```powershell
 cd .\demos\epic-ehr\service
-uv sync --extra test
+uv sync --locked --extra test --default-index https://pypi.org/simple
 Copy-Item .env.example .env
 ```
 
@@ -92,7 +92,7 @@ Browser lifecycle and actions run on one dedicated thread.
 Provision the SDK-matched runtime before an offline demonstration:
 
 ```powershell
-uv run python -m copilot download-runtime
+uv run --frozen python -m copilot download-runtime
 ```
 
 Set the Copilot model name in `MODEL_DEPLOYMENT`; `gpt-6-astra` is the requested
@@ -100,6 +100,34 @@ default, not a guarantee of account availability. Supply `COPILOT_GITHUB_TOKEN`
 for the isolated runtime. Alternatively, configure `AZURE_AI_FOUNDRY_ENDPOINT`
 and use Entra ID (`DefaultAzureCredential`) for Azure BYOM; then
 `MODEL_DEPLOYMENT` is your deployment name. API-key authentication is not used.
+
+The repository's configured Foundry target is account
+`nl-stu-jvw-ai-saoyr2` in `nl-stu-jvw-foundry-rg`, Sweden Central. For the
+medical agent's Azure BYOM mode, set these values in the local environment or
+the VM's **Configure Epic Agent** file:
+
+```text
+AZURE_AI_FOUNDRY_ENDPOINT=https://nl-stu-jvw-ai-saoyr2.openai.azure.com
+MODEL_DEPLOYMENT=nl-stu-jvw-gpt-6-astra
+```
+
+The deployment serves `gpt-6-astra` version `2026-09-03`. Its SKU is
+**GlobalStandard**: the resource's Sweden location does not guarantee that
+inference stays in Sweden. Use only synthetic data in this demo.
+
+These two values, plus `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`,
+`AZURE_AI_RESOURCE_GROUP`, `AZURE_AI_ACCOUNT_NAME`, and `AZURE_AI_LOCATION`,
+are saved as GitHub repository **variables**, not secrets. Variables do not
+authenticate a process or automatically update local/VM configuration.
+The account disables API-key authentication; use an authorized Entra identity
+through `DefaultAzureCredential`. A VM identity needs inference permission on
+this account; GitHub Actions should use an explicitly configured OIDC identity,
+not a copied Azure account key. Neither identity is provisioned by saving variables.
+
+This Astra selection applies to the medical agent's Copilot host-tool skills.
+It does not establish compatibility with the plant agent's native
+`computer_use_preview` tool, and no such model deployment was found in this
+account. Keep that agent's model selection separate.
 
 1. On the VM, open a **dedicated** browser profile:
 
@@ -187,6 +215,10 @@ inbound firewall rule is needed. The script requires a healthy local API, uses a
 one-hour tunnel, and **does not enable anonymous access**. Ctrl+C closes it.
 
 Use the HTTPS URL printed by devtunnel in place of `http://127.0.0.1:8000`.
+Copy the **forwarded port** URL, for example
+`https://<tunnel-id>-8000.<region>.devtunnels.ms`, not the port-less
+**Inspect network activity** URL. The integrated launcher labels the forwarded
+address **API HTTPS URL (copy this)**.
 Response links are relative, so they also work behind Host-rewriting tunnels.
 Interactive clients authenticate to the tunnel. For programmatic clients, obtain
 a tunnel connect token using your devtunnel CLI's token command and send it as
@@ -195,9 +227,17 @@ the API `Authorization` header separately. Treat both tokens as secrets.
 Never send patient data in URL parameters.
 
 ```powershell
-# Run locally; do not save or publish the printed token.
+# Run in the VM's hosting account; never publish or save the token in plaintext.
+devtunnel list
 devtunnel token <tunnel-id> --scopes connect
 ```
+
+Run these commands in the VM under the Windows account and devtunnel sign-in
+that started the host. Use the management **Tunnel ID** returned by
+`devtunnel list`, including its region suffix. Do not derive it from the
+forwarding URL: the URL's hostname prefix and the management ID can differ.
+Paste the raw connect token into the tester's separate tunnel-token field;
+the VM API bearer remains required in its own field.
 
 See [Microsoft's dev tunnel security guidance](https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/security).
 
@@ -225,7 +265,7 @@ On the local machine, install the demo package, then run:
 
 ```powershell
 cd .\demos\epic-ehr\service
-uv sync --extra test
+uv sync --locked --extra test --default-index https://pypi.org/simple
 .\testing.ps1
 ```
 
@@ -268,9 +308,28 @@ fabricated clinical message. This is not a full hospital interface profile.
 ## Verify
 
 ```powershell
-uv run python -m unittest discover tests -v
-uv run epic-agent --banner-only
+uv run --frozen --extra test python -m unittest discover tests -v
+uv run --frozen epic-agent --banner-only
 ```
 
 Unit/API tests use fixtures and mocked model calls; they do not contact Epic or
 Azure. Infrastructure template and image preparation are in `infra\`.
+
+## Dependency maintenance
+
+Commit `service\uv.lock` together with `service\pyproject.toml` so installations
+use the reviewed dependency set. The lock uses public PyPI artifact URLs and
+SHA-256 hashes, not machine-specific package-feed URLs. From `service\`, refresh
+compatible stable releases and verify them before committing. The launchers use
+`--frozen` so starting either UI does not rewrite the lock:
+
+```powershell
+uv lock --upgrade --default-index https://pypi.org/simple
+uv sync --locked --extra test --default-index https://pypi.org/simple
+uv run --frozen --extra test python -m unittest discover tests -v
+```
+
+The Copilot SDK is deliberately pinned because its matched CLI runtime and
+session isolation APIs are part of the demo's behavior. Upgrade that pin
+explicitly, provision the matching runtime, and verify the guarded skill
+sessions rather than assuming `uv lock --upgrade` changes it.

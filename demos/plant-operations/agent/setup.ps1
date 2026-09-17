@@ -35,8 +35,11 @@ try {
     }
 
     # -- Step 2: Sync dependencies ---------------------------------------------
-    Write-Host "[2/4] Running uv sync..." -ForegroundColor Cyan
-    uv sync
+    Write-Host "[2/4] Syncing locked dependencies from public PyPI..." -ForegroundColor Cyan
+    uv sync --locked --default-index https://pypi.org/simple
+    if ($LASTEXITCODE -ne 0) {
+        throw "Locked dependency sync failed. Check network access and the committed uv.lock."
+    }
     Write-Host "  Dependencies synced." -ForegroundColor Green
 
     # -- Step 3: Validate venv & key imports -----------------------------------
@@ -46,7 +49,7 @@ try {
         throw "Virtual environment not found at $venvPath. uv sync may have failed."
     }
 
-    uv run python -c "import azure.ai.projects; import pyautogui; import PIL; print('OK')"
+    uv run --frozen python -c "import azure.ai.projects; import pyautogui; import PIL; print('OK')"
     if ($LASTEXITCODE -ne 0) {
         throw "Package import check failed. The virtual environment may be corrupt -- try removing .venv and re-running this script."
     }
@@ -72,7 +75,7 @@ try {
     Write-Host "Next steps:" -ForegroundColor Cyan
     Write-Host "  1. Ensure AZURE_AI_FOUNDRY_ENDPOINT is set (see above)." -ForegroundColor White
     Write-Host "  2. Log in to Azure:  az login" -ForegroundColor White
-    Write-Host "  3. Run the agent:    uv run python main.py" -ForegroundColor White
+    Write-Host "  3. Run the agent:    uv run --frozen python main.py" -ForegroundColor White
     Write-Host ""
 } catch {
     Write-Host ""

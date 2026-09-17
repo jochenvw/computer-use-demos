@@ -4,14 +4,21 @@ version = "0.1.0"
 description = "SRE-style Operational Reliability Agent for plant manager demo"
 requires-python = ">=3.11"
 dependencies = [
-    "azure-ai-projects>=1.0.0b11",
-    "azure-identity>=1.20.0",
+    "azure-ai-projects>=2.6.1",
+    "azure-identity>=1.25.3",
     "pyautogui>=0.9.54",
-    "Pillow>=11.0.0",
-    "a2a-sdk[http-server]>=0.3.25",
-    "uvicorn>=0.34.0",
-    "rich>=13.9.0",
+    "pillow>=12.3.0",
+    "a2a-sdk[http-server]>=1.1.2",
+    "uvicorn>=0.52.4",
+    "rich>=15.0.0",
+    "openai>=3.11.0",
+    "pyperclip>=1.11.0",
+    "pygetwindow>=0.0.9",
+    "starlette>=1.6.0",
 ]
+
+[tool.uv]
+prerelease = "disallow"
 
 [project.scripts]
 sre-agent = "main:main"

@@ -24,7 +24,7 @@ try {
     $flags = @('--port', "$Port")
     if ($BannerOnly) { $flags += '--banner-only' }
     if ($WithTunnel) { $flags += '--tunnel' }
-    & uv run epic-agent @flags
+    & uv run --frozen epic-agent @flags
     exit $LASTEXITCODE
 } finally {
     Pop-Location

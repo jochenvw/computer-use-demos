@@ -25,15 +25,15 @@ trend charts.
 
 ```powershell
 cd .\demos\plant-operations\agent
-uv sync
+uv sync --locked --default-index https://pypi.org/simple
 $env:AZURE_AI_FOUNDRY_ENDPOINT = "https://your-resource.services.ai.azure.com"
 
 # Safe default: model observes and proposes actions without clicking
-uv run python main.py --once
+uv run --frozen python main.py --once
 
 # Explicitly enable local simulator control
 $env:ALLOW_COMPUTER_CONTROL = "1"
-uv run python main.py --once --live
+uv run --frozen python main.py --once --live
 ```
 
 The agent aborts unless the exact
