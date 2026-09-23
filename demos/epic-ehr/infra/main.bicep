@@ -28,6 +28,12 @@ param apiClientAddressPrefix string = ''
 @description('VM size for the interactive desktop worker.')
 param vmSize string = 'Standard_D4as_v5'
 
+@description('Daily auto-shutdown (deallocate) time, HHmm, in shutdownTimeZone. Empty disables it.')
+param shutdownTime string = '2300'
+
+@description('Windows time zone ID for the auto-shutdown schedule.')
+param shutdownTimeZone string = 'W. Europe Standard Time'
+
 var vnetName = '${prefix}-vnet'
 var workloadSubnetName = 'desktop'
 var bastionSubnetName = 'AzureBastionSubnet'
@@ -216,6 +222,19 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
         vTpmEnabled: true
       }
     }
+  }
+}
+
+resource autoShutdown 'Microsoft.DevTestLab/schedules@2018-09-15' = if (!empty(shutdownTime)) {
+  name: 'shutdown-computevm-${vm.name}'
+  location: location
+  properties: {
+    status: 'Enabled'
+    taskType: 'ComputeVmShutdownTask'
+    dailyRecurrence: { time: shutdownTime }
+    timeZoneId: shutdownTimeZone
+    targetResourceId: vm.id
+    notificationSettings: { status: 'Disabled' }
   }
 }
 

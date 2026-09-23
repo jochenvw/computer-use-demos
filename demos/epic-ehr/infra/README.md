@@ -241,4 +241,7 @@ The VM, disk, Bastion Standard, NAT gateway, public IPs and traffic are billable
 **Stopping/deallocating the VM does not stop Bastion/NAT/disk billing.**
 Review current regional prices and subscription discounts. Remove the dedicated
 demo resource group when the environment is no longer needed, after preserving
-anything you want to keep. No automatic teardown or shutdown is configured.
+anything you want to keep. The VM auto-shuts down (deallocates) daily at
+23:00 W. Europe time (`shutdownTime` / `shutdownTimeZone` in `main.bicep`;
+empty `shutdownTime` disables it). `start-demo.ps1` starts it again. No
+automatic teardown is configured.
