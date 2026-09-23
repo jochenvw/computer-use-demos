@@ -56,6 +56,33 @@ class FakeBrowser:
         self.actions.append((name, values))
 
 
+class FakeDesktop:
+    def __init__(self):
+        self.actions = []
+        self.closed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.closed = True
+
+    def screenshot(self):
+        return "data:image/jpeg;base64,c3FsLWRlc2t0b3A="
+
+    def click(self, x, y):
+        self.actions.append(("click", {"x": x, "y": y}))
+
+    def press_key(self, key):
+        self.actions.append(("press_key", {"key": key}))
+
+    def scroll(self, delta_y):
+        self.actions.append(("scroll", {"delta_y": delta_y}))
+
+    def run_query(self, sql):
+        self.actions.append(("run_query", {"sql": sql}))
+
+
 class FakeClient:
     def __init__(self, script):
         self.script = script
@@ -112,10 +139,13 @@ class FakeClient:
 class ComputerUseTests(unittest.TestCase):
     def build(self, calls, config=None):
         self.browser = FakeBrowser()
+        self.desktop = FakeDesktop()
         self.client = FakeClient(calls)
         return ComputerUseEpicAdapter(
             config or settings(), client_factory=self.client.factory,
-            browser_factory=lambda _: self.browser, require_runtime_token=False,
+            browser_factory=lambda _: self.browser,
+            desktop_factory=lambda *_: self.desktop,
+            require_runtime_token=False,
         )
 
     def test_cli_skill_uses_screenshots_and_scoped_sdk_session(self):
@@ -155,18 +185,20 @@ class ComputerUseTests(unittest.TestCase):
 
     def test_wrong_patient_fails(self):
         adapter = self.build([("observe", {}), ("finish", patient_result("OTHER"))])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             adapter.retrieve("DEMO-100042", [ResourceType.patient])
 
-    def test_other_subject_fails(self):
+    def test_host_assigns_requested_subject(self):
         adapter = self.build([("observe", {}), ("finish", {
             "patient_id": "DEMO-100042", "resources": [{
                 "resource_type": "ecg", "source_id": "ecg-1",
                 "data": {"subject": {"reference": "Patient/OTHER"}},
             }],
         })])
-        with self.assertRaises(ValueError):
-            adapter.retrieve("DEMO-100042", [ResourceType.ecg])
+        bundle = adapter.retrieve("DEMO-100042", [ResourceType.ecg])
+        self.assertEqual(
+            {"reference": "Patient/DEMO-100042"}, bundle[0].data["subject"]
+        )
 
     def test_model_cannot_type_arbitrary_text_or_recover_from_failure(self):
         adapter = self.build([
@@ -180,14 +212,101 @@ class ComputerUseTests(unittest.TestCase):
 
     def test_strict_host_tool_arguments(self):
         adapter = self.build([("click", {"x": True, "y": 0})])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             adapter.retrieve("DEMO-100042", [ResourceType.patient])
         self.assertEqual([], self.browser.actions)
 
     def test_expired_session_stops(self):
         adapter = self.build([("stop", {"reason": "session_expired"})])
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "session_expired"):
             adapter.retrieve("DEMO-100042", [ResourceType.patient])
+
+    def test_synthetic_portal_adds_explicit_supported_workflow_prompt(self):
+        config = replace(
+            settings(),
+            synthetic_portal_enabled=True,
+            epic_origin="http://127.0.0.1:8001",
+            epic_ready_url_prefix="http://127.0.0.1:8001/",
+        )
+        adapter = self.build(
+            [("observe", {}), ("finish", patient_result())],
+            config=config,
+        )
+        adapter.retrieve("DEMO-100042", [ResourceType.patient])
+        prompt = self.client.options["custom_agents"][0]["prompt"]
+        self.assertIn("click Uitslagen", prompt)
+        self.assertIn("click Bloedonderzoek", prompt)
+        self.assertIn("does not require patient search", prompt)
+
+    def test_personal_portal_uses_current_authenticated_account(self):
+        config = replace(settings(), personal_portal_enabled=True)
+        adapter = self.build(
+            [("observe", {}), ("finish", patient_result("SELF"))],
+            config=config,
+        )
+
+        adapter.retrieve("SELF", [ResourceType.patient])
+
+        prompt = self.client.options["custom_agents"][0]["prompt"]
+        self.assertIn("personal patient portal session", prompt)
+        self.assertIn("Do not search for another patient", prompt)
+        stop_schema = self.client.tools["stop"].parameters
+        self.assertNotIn(
+            "patient_not_verified",
+            json.dumps(stop_schema),
+        )
+
+    def test_sql_desktop_writes_query_and_returns_observation(self):
+        observation = {
+            "patient_id": "SYN-2026-0001",
+            "resources": [{
+                "resource_type": "observations",
+                "source_id": "lab-HB-1",
+                "data": {
+                    "status": "final",
+                    "subject": {"reference": "Patient/SYN-2026-0001"},
+                    "code": {"coding": [{"code": "HB", "display": "Emoglobina"}]},
+                    "effectiveDateTime": "2026-09-21T08:30:00",
+                    "valueQuantity": {"value": 10.4, "unit": "g/dL"},
+                },
+            }],
+        }
+        query = (
+            "SELECT e.codice, e.valore_numerico FROM oncologia_demo.esame_laboratorio e "
+            "JOIN oncologia_demo.paziente p ON p.paziente_id = e.paziente_id "
+            "WHERE p.mrn = N'SYN-2026-0001'"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = self.build(
+                [
+                    ("observe", {}),
+                    ("run_query", {"sql": "DELETE FROM oncologia_demo.paziente"}),
+                    ("run_query", {"sql": query}),
+                    ("finish", observation),
+                ],
+                config=replace(
+                    settings(),
+                    sql_demo_query=Path(directory) / "Italian Patient Demo.sql",
+                    ssms_executable=Path(directory) / "Ssms.exe",
+                ),
+            )
+
+            result = adapter.retrieve_sql(
+                "SYN-2026-0001", [ResourceType.observations],
+            )
+
+        self.assertEqual(
+            "sql-desktop-observed", result.resources[0].provenance.source
+        )
+        self.assertEqual("failure", self.client.results[1].result_type)
+        self.assertEqual(
+            [("run_query", {"sql": f"USE OncologiaDemo;\n{query};\n"})],
+            self.desktop.actions,
+        )
+        self.assertTrue(self.desktop.closed)
+        prompt = self.client.options["custom_agents"][0]["prompt"]
+        self.assertIn("OncologiaDemo", prompt)
+        self.assertIn("mrn", self.client.skill_text)
 
     def test_action_budget_is_enforced(self):
         adapter = self.build([("observe", {})] * 5)
@@ -223,6 +342,16 @@ class ComputerUseTests(unittest.TestCase):
     def test_live_opt_in_required(self):
         with self.assertRaises(RuntimeError):
             replace(settings(), computer_use_enabled=False).validate()
+
+    def test_synthetic_portal_requires_explicit_loopback_opt_in(self):
+        loopback = replace(
+            settings(),
+            epic_origin="http://127.0.0.1:8001",
+            epic_ready_url_prefix="http://127.0.0.1:8001/",
+        )
+        with self.assertRaisesRegex(RuntimeError, "loopback HTTP"):
+            loopback.validate()
+        replace(loopback, synthetic_portal_enabled=True).validate()
 
     def test_runtime_token_requirement_is_explicit_for_injected_factories(self):
         client = FakeClient([])
@@ -275,7 +404,7 @@ class LocalFileSkillTests(unittest.TestCase):
         runner = CopilotSkillRunner(
             settings(), client_factory=client.factory, require_runtime_token=False,
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()))
 
     def test_unopened_file_cannot_be_evidence(self):
@@ -290,7 +419,7 @@ class LocalFileSkillTests(unittest.TestCase):
         runner = CopilotSkillRunner(
             settings(), client_factory=client.factory, require_runtime_token=False,
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()))
 
     def test_file_read_limit_and_hash_recheck(self):

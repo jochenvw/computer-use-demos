@@ -19,6 +19,7 @@ class ResourceType(str, Enum):
 class OutputFormat(str, Enum):
     json = "json"
     fhir = "fhir"
+    omop = "omop"
     ndjson = "ndjson"
     fhir_xml = "fhir-xml"
     hl7 = "hl7"
@@ -27,6 +28,7 @@ class OutputFormat(str, Enum):
 class RetrievalSource(str, Enum):
     files = "files"
     ehr = "ehr"
+    sql = "sql"
     both = "both"
 
 
@@ -97,4 +99,5 @@ class JobRecord(BaseModel):
     cache_status: CacheStatus | None = None
     collected_at: datetime | None = None
     expires_at: datetime | None = None
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
     bundle: ClinicalBundle | None = Field(default=None, exclude=True)

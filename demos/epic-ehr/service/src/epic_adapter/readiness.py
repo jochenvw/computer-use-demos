@@ -31,9 +31,10 @@ def _api_readiness(settings: Settings) -> ReadinessCheck:
 
 
 def _files_readiness(settings: Settings) -> ReadinessCheck:
-    if not settings.file_roots:
+    roots = settings.file_roots + settings.asset_roots
+    if not roots:
         return ReadinessCheck("not_ready", "No approved file roots are configured.")
-    missing = [str(root) for root in settings.file_roots if not root.is_dir()]
+    missing = [str(root) for root in roots if not root.is_dir()]
     if missing:
         return ReadinessCheck(
             "not_ready", f"Missing or inaccessible file root(s): {', '.join(missing)}"

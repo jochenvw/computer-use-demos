@@ -14,6 +14,17 @@ class TesterTests(unittest.TestCase):
         page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
         self.assertIn('let csrf="CSRF_TOKEN"', page)
         self.assertIn("bypass_cache", page)
+        self.assertIn("TUNNEL_URL_DEFAULT", page)
+        self.assertIn("Uses protected local token when blank", page)
+        self.assertIn("<b>Patient portal</b>", page)
+        self.assertIn("<b>ECG on the desktop</b>", page)
+        self.assertIn("<b>Italian oncology database</b>", page)
+        self.assertIn("renderTimeline(b.timeline)", page)
+        self.assertTrue(page.isascii())
+        self.assertIn('$("browserScenario").onclick', page)
+        self.assertIn('$("fileScenario").onclick', page)
+        self.assertIn('$("sqlScenario").onclick', page)
+        self.assertIn('<option value="omop">OMOP CDM JSON</option>', page)
         self.assertIn('$("format").value', page)
         self.assertIn("textContent", page)
         self.assertNotIn("innerHTML", page)
@@ -25,6 +36,8 @@ class TesterTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 upstream_origin(value)
         self.assertEqual("/v1/retrieval-jobs/" + "a" * 32 + "/result?format=hl7", fixed_path("result", "a" * 32, output_format="hl7"))
+        self.assertEqual("/v1/retrieval-jobs/" + "a" * 32 + "/result?format=omop", fixed_path("result", "a" * 32, output_format="omop"))
+        self.assertEqual("/v1/retrieval-jobs/" + "a" * 32 + "/transform", fixed_path("transform", "a" * 32))
         with self.assertRaises(ValueError):
             fixed_path("status", "../etc")
 
@@ -83,6 +96,75 @@ class TesterTests(unittest.TestCase):
             server.shutdown()
             thread.join()
             server.server_close()
+
+    def test_relay_uses_configured_defaults_without_exposing_tokens(self):
+        observed = {}
+
+        class Upstream(BaseHTTPRequestHandler):
+            def do_POST(self):
+                observed["authorization"] = self.headers.get("Authorization")
+                observed["tunnel"] = self.headers.get("X-Tunnel-Authorization")
+                observed["body"] = json.loads(
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                )
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"job_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}')
+
+            def log_message(self, *args):
+                pass
+
+        upstream = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
+        defaults = {
+            "tunnel_url": f"http://127.0.0.1:{upstream.server_port}",
+            "bearer_token": "stored-api-token",
+            "tunnel_token": "stored-tunnel-token",
+        }
+        relay = ThreadingHTTPServer(
+            ("127.0.0.1", 0), make_handler("csrf", True, defaults)
+        )
+        threads = [
+            threading.Thread(target=server.serve_forever, daemon=True)
+            for server in (upstream, relay)
+        ]
+        for thread in threads:
+            thread.start()
+        try:
+            with urlopen(f"http://127.0.0.1:{relay.server_port}") as response:
+                page = response.read().decode()
+            self.assertIn(defaults["tunnel_url"], page)
+            self.assertNotIn("stored-api-token", page)
+            self.assertNotIn("stored-tunnel-token", page)
+            request = Request(
+                f"http://127.0.0.1:{relay.server_port}/api/jobs",
+                data=json.dumps({
+                    "tunnel_url": "",
+                    "bearer_token": "",
+                    "tunnel_token": "",
+                    "request": {
+                        "patient_id": "DEMO-100042",
+                        "source": "ehr",
+                        "resources": ["observations"],
+                    },
+                }).encode(),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-CSRF-Token": "csrf",
+                },
+                method="POST",
+            )
+            with urlopen(request) as response:
+                self.assertEqual(200, response.status)
+            self.assertEqual("Bearer stored-api-token", observed["authorization"])
+            self.assertEqual(
+                "tunnel stored-tunnel-token", observed["tunnel"]
+            )
+            self.assertEqual("DEMO-100042", observed["body"]["patient_id"])
+        finally:
+            for server, thread in zip((upstream, relay), threads):
+                server.shutdown()
+                thread.join()
+                server.server_close()
 
     def test_relay_downloads_exact_bytes_and_returns_errors_as_json(self):
         requested = []

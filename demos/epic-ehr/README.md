@@ -272,14 +272,98 @@ uv sync --locked --extra test --default-index https://pypi.org/simple
 .\testing.ps1
 ```
 
-Open `http://127.0.0.1:8765`, paste the printed tunnel URL, API bearer token,
-and (when required) a separate tunnel connect token. The local UI uses a
-loopback-only same-origin relay rather than changing API CORS or using an
-anonymous tunnel. It accepts only an HTTPS `*.devtunnels.ms` origin and fixed
-job/result/file routes; it does not retain credentials after disconnect or page
-exit. Fixture mode remains the safe default. `bypass_cache` intentionally
-causes live skill work only in the Copilot backend, so use it only after the
-manual authorized browser login.
+When the deployment's protected `.azure\rg-epic-demo-swc` state contains the
+named tunnel origin, API bearer token, and tunnel connect token, `testing.ps1`
+decrypts them only into the tester process and opens `http://127.0.0.1:8765`.
+The URL is prefilled and the credential fields stay blank: the loopback relay
+uses the protected defaults server-side, so no demo-time copy/paste is needed.
+Use `-ManualCredentials` to disable this behavior.
+
+The local UI uses a loopback-only same-origin relay rather than changing API
+CORS or using an anonymous tunnel. It accepts only an HTTPS
+`*.devtunnels.ms` origin and fixed job/result/file routes. Secrets are never
+embedded in the page or persisted by the tester. Fixture mode remains the safe
+default. `bypass_cache` intentionally causes live skill work only in the
+Copilot backend, so use it only after the manual authorized browser login.
+
+For the complete no-copy/paste startup, run:
+
+```powershell
+.\demos\epic-ehr\start-demo.ps1 -SubscriptionId <subscription-id>
+```
+
+It starts the VM, obtains fresh `host` and `connect` tokens through the locally
+signed-in Dev Tunnel CLI, stores them with Windows Data Protection API (DPAPI),
+updates the VM host task through protected Run Command parameters, opens the
+Bastion RDP connection, and starts the preconfigured local tester. It never
+prints either token. In RDP, double-click **Epic Live Demo** and complete the
+manual read-only Epic login. The visible agent and browser remain in the RDP
+session.
+
+`infra\enable-demo-mode.ps1` remains available when the VM and RDP session are
+already running and only the protected tunnel credentials/shortcut need refresh.
+
+## Three-scenario demo runbook
+
+| # | Button | Skill | What the agent does | Typical time |
+|---|---|---|---|---|
+| 1 | Browser EHR | `epic-browser` | Navigates the logged-in Mijn Dossier session → Uitslagen, reads 5 results | depends on portal |
+| 2 | Local clinical files | `local-files` | Lists Desktop `assets`, opens `ecg.jpg`, transcribes only printed/visible data (rate, PR, QRS, QT/QTc, axes, printed statements, speed/gain) → DiagnosticReport + one Observation per measurement | ~30 s |
+| 3 | Italian SSMS | `sql-desktop` | Opens SSMS on `OncologiaDemo`, writes 2 read-only queries on the Italian schema → Patient + 8 labs | ~55 s |
+
+Before the demo:
+
+1. `start-demo.ps1`, then log in to Mijn Dossier in the VM's Edge **just before**
+   running scenario 1 (MyChart logs out after ~20 min idle; the agent then stops
+   with `session_expired` and the UI says to log in again).
+2. Keep the RDP window **restored**. A minimized RDP client stops drawing and
+   ignores keyboard input, so SSMS reports `rdp_minimized`. The local registry
+   value `HKCU\Software\Microsoft\Terminal Server Client\RemoteDesktop_SuppressWhenMinimized=2`
+   (set once; applies to new RDP connections) keeps a minimized session live.
+   A **closed/disconnected** RDP window gives the same error; run
+   `infra\keep-session-alive.ps1` to move the session to the VM console
+   (`tscon`) so it keeps rendering without any RDP client. Reconnecting RDP
+   takes it back.
+3. Output: pick FHIR, OMOP, JSON, … or **Custom schema / ontology** (paste any
+   JSON schema, example, or description; a Dutch example is prefilled).
+   **Show last result in this format** re-renders the same job without rerunning
+   computer use.
+
+What the audience sees:
+
+- **VM console window** (Rich TUI): fixed hospital banner with model, skills,
+  and live status, plus a scrolling log in plain clinical language (`[REQUEST]`,
+  `[STEP]`, `[SQL]`, `[THINKING]`, `[RESULT]`, `[DONE]`). `[THINKING]` lines are
+  the model's reasoning summaries (`EPIC_REASONING_SUMMARY`=`none|concise|detailed`,
+  default `concise`). `EPIC_TUI=0` falls back to plain log lines.
+- **Test UI**: the same lines as a live timeline (job status field `timeline`),
+  a "What was found" summary, and the formatted output.
+- Each skill closes what it opened (SSMS, the `assets` folder, the ECG viewer),
+  so the desktop is clean for the next scenario.
+
+Operational notes:
+
+- The model deployment needs real throughput; 10K TPM throttled every run.
+  The Foundry deployment runs at 300K TPM. `EPIC_REASONING_EFFORT` defaults
+  to `low` for demo speed.
+- The deployment name is custom, so the runtime can't infer vision support. The
+  host declares vision capabilities on the session; without that, tool images
+  never reached the model.
+- SQL Server uses a trusted local `localhost` TLS certificate (SSMS 20 enforces
+  encryption). Each SQL run closes leftover SSMS instances and clears SSMS
+  auto-recover files, so no dialog blocks the agent.
+
+Operator inner loop (diagnose → fix → release → test, about 5 min):
+
+```powershell
+cd .\demos\epic-ehr\infra
+.\deploy-changed.ps1 -Files src\epic_adapter\desktop.py   # zip + chunked Run Command, restarts API only
+.\run-scenario.ps1 -Scenario sql -Format fhir -Schema '{"labuitslagen":[{"test_nl":"...","waarde":0}]}'
+```
+
+`run-scenario.ps1` prints the readable timeline, the result, the per-step agent trace, and downloads
+screenshots to `.azure\<rg>\diagnostics\<run>` (gitignored; may contain real
+portal screenshots).
 
 ## Versioned release and desktop launcher
 
@@ -326,6 +410,9 @@ Running an installed version does not contact GitHub.
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=fhir-xml` | Explicit-subset FHIR XML |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=hl7` | HL7 v2.5.1 ORU observation/report projection |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=ndjson` | Normalized resource lines |
+| GET | `/v1/retrieval-jobs/{job_id}/result?format=omop` | OMOP CDM 5.4 JSON (source values, unmapped concepts) |
+| POST | `/v1/retrieval-jobs/{job_id}/transform` | Model-assisted mapping to any target schema/ontology: body `{"schema": "..."}` |
+| GET | `/v1/admin/diagnostics?runs=N` | Authenticated per-run agent traces (may contain clinical screenshots) |
 | GET | `/v1/retrieval-jobs/{job_id}/files/{file_id}` | Original file, reverified before download |
 | GET | `/healthz` | Process health only |
 | GET | `/v1/readiness` | Authenticated API/files/browser/login and active-job readiness |

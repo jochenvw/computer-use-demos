@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import hashlib
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -27,6 +28,165 @@ def normalized_json(bundle: ClinicalBundle, base_url: str) -> dict[str, Any]:
             for file in bundle.files
         ],
     }
+
+
+def omop_json(bundle: ClinicalBundle) -> dict[str, Any]:
+    """Project the supported clinical subset into OMOP CDM 5.4-style rows.
+
+    Source codes and text are preserved because this demo does not ship a
+    vocabulary service that can safely assign standard OMOP concept IDs.
+    """
+    tables: dict[str, list[dict[str, Any]]] = {
+        "person": [],
+        "visit_occurrence": [],
+        "measurement": [],
+        "note": [],
+    }
+    person_id = _omop_id("person", bundle.patient_id)
+    patients = [
+        resource for resource in bundle.resources
+        if resource.resource_type == ResourceType.patient
+    ]
+    patient = patients[0].data if patients else {}
+    birth = patient.get("birthDate", "")
+    tables["person"].append({
+        "person_id": person_id,
+        "gender_concept_id": 0,
+        "year_of_birth": _year(birth),
+        "month_of_birth": _month(birth),
+        "day_of_birth": _day(birth),
+        "race_concept_id": 0,
+        "ethnicity_concept_id": 0,
+        "person_source_value": bundle.patient_id,
+        "gender_source_value": patient.get("gender"),
+    })
+    for resource in bundle.resources:
+        data = resource.data
+        if resource.resource_type == ResourceType.encounters:
+            start = _date_value(data.get("period", {}).get("start"))
+            end = _date_value(data.get("period", {}).get("end")) or start
+            tables["visit_occurrence"].append({
+                "visit_occurrence_id": _omop_id("visit", resource.source_id),
+                "person_id": person_id,
+                "visit_concept_id": 0,
+                "visit_start_date": start,
+                "visit_end_date": end,
+                "visit_type_concept_id": 0,
+                "visit_source_value": _concept_text(data.get("type")),
+            })
+        elif resource.resource_type == ResourceType.observations:
+            measurement = {
+                "measurement_id": _omop_id("measurement", resource.source_id),
+                "person_id": person_id,
+                "measurement_concept_id": 0,
+                "measurement_date": _date_value(
+                    data.get("effectiveDateTime") or data.get("issued")
+                ),
+                "measurement_type_concept_id": 0,
+                "value_as_number": _quantity_value(data.get("valueQuantity")),
+                "value_source_value": data.get("valueString"),
+                "unit_concept_id": 0,
+                "unit_source_value": _quantity_unit(data.get("valueQuantity")),
+                "measurement_source_value": _concept_code(data.get("code")),
+                "measurement_source_concept_id": 0,
+                "measurement_source_text": _concept_text(data.get("code")),
+            }
+            components = data.get("component", [])
+            if any(
+                key.startswith("value") for key in data
+            ) or not isinstance(components, list) or not components:
+                tables["measurement"].append(measurement)
+            for index, component in enumerate(
+                components if isinstance(components, list) else [], 1
+            ):
+                if not isinstance(component, dict):
+                    continue
+                tables["measurement"].append({
+                    **measurement,
+                    "measurement_id": _omop_id(
+                        "measurement", f"{resource.source_id}-{index}"
+                    ),
+                    "value_as_number": _quantity_value(component.get("valueQuantity")),
+                    "value_source_value": component.get("valueString"),
+                    "unit_source_value": _quantity_unit(component.get("valueQuantity")),
+                    "measurement_source_value": _concept_code(component.get("code")),
+                    "measurement_source_text": _concept_text(component.get("code")),
+                })
+        elif resource.resource_type in {ResourceType.documents, ResourceType.ecg}:
+            tables["note"].append({
+                "note_id": _omop_id("note", resource.source_id),
+                "person_id": person_id,
+                "note_date": _date_value(
+                    data.get("effectiveDateTime") or data.get("date")
+                ),
+                "note_type_concept_id": 0,
+                "note_class_concept_id": 0,
+                "note_text": data.get("conclusion") or data.get("description") or "",
+                "note_source_value": _concept_text(data.get("code") or data.get("type")),
+            })
+    return {
+        "cdm_version": "5.4",
+        "projection": "demo-source-values-unmapped",
+        "tables": tables,
+    }
+
+
+def _omop_id(namespace: str, value: str) -> int:
+    digest = hashlib.sha256(f"{namespace}:{value}".encode()).digest()
+    return int.from_bytes(digest[:8], "big") & 0x7FFF_FFFF_FFFF_FFFF
+
+
+def _date_value(value: Any) -> str | None:
+    return value[:10] if isinstance(value, str) and len(value) >= 10 else None
+
+
+def _year(value: Any) -> int | None:
+    date = _date_value(value)
+    return int(date[:4]) if date and date[:4].isdigit() else None
+
+
+def _month(value: Any) -> int | None:
+    date = _date_value(value)
+    return int(date[5:7]) if date and date[5:7].isdigit() else None
+
+
+def _day(value: Any) -> int | None:
+    date = _date_value(value)
+    return int(date[8:10]) if date and date[8:10].isdigit() else None
+
+
+def _concept_code(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    for coding in value.get("coding", []):
+        if isinstance(coding, dict) and coding.get("code"):
+            return str(coding["code"])
+    return None
+
+
+def _concept_text(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    if value.get("text"):
+        return str(value["text"])
+    for coding in value.get("coding", []):
+        if isinstance(coding, dict) and coding.get("display"):
+            return str(coding["display"])
+    return None
+
+
+def _quantity_value(value: Any) -> int | float | None:
+    if not isinstance(value, dict):
+        return None
+    number = value.get("value")
+    return number if isinstance(number, (int, float)) and not isinstance(number, bool) else None
+
+
+def _quantity_unit(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    unit = value.get("code") or value.get("unit")
+    return str(unit) if unit is not None else None
 
 
 def ndjson(bundle: ClinicalBundle) -> str:

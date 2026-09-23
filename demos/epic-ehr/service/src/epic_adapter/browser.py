@@ -139,7 +139,7 @@ class BrowserSession:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         try:
             if self._page is not None and not self._page.is_closed():
-                self._page.unroute("**/*", self._guard_navigation)
+                self._page.unroute_all(behavior="wait")
                 self._page.remove_listener("dialog", self._dismiss_dialog)
                 self._page.remove_listener("popup", self._close_popup)
         finally:

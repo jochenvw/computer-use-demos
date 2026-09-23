@@ -28,6 +28,9 @@ class ReleaseAssetTests(unittest.TestCase):
         installer = (
             ROOT / "demos/epic-ehr/infra/install-agent.ps1"
         ).read_text(encoding="utf-8")
+        live_launcher = (
+            ROOT / "demos/epic-ehr/service/live.ps1"
+        ).read_text(encoding="utf-8")
         self.assertIn("cosign verify-blob", launcher)
         self.assertIn("--certificate-identity", launcher)
         self.assertIn("cosign-windows-amd64", launcher)
@@ -40,6 +43,10 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertIn("$attempt -le 5", launcher)
         self.assertIn("--native-tls", installer)
         self.assertIn("$attempt -le 5", installer)
+        self.assertIn("Epic Live Demo", installer)
+        self.assertIn("browser.ps1", live_launcher)
+        self.assertIn("run.ps1", live_launcher)
+        self.assertNotIn("-WithTunnel", live_launcher)
         self.assertIn("/v1/admin/drain", launcher)
         self.assertIn("Approved channel", launcher)
         self.assertNotIn("/releases/latest", launcher)

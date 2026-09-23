@@ -5,7 +5,14 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from epic_adapter.adapters.fixture import FixtureEpicAdapter
-from epic_adapter.formats import fhir_bundle, fhir_xml, hl7_oru, ndjson, normalized_json
+from epic_adapter.formats import (
+    fhir_bundle,
+    fhir_xml,
+    hl7_oru,
+    ndjson,
+    normalized_json,
+    omop_json,
+)
 from epic_adapter.models import (
     ClinicalBundle,
     ClinicalResource,
@@ -65,6 +72,20 @@ def attachment() -> FileRecord:
 
 
 class FhirFormatTests(unittest.TestCase):
+    def test_omop_projects_patient_and_measurement_source_values(self) -> None:
+        result = omop_json(bundle(blood_pressure()))
+
+        self.assertEqual("5.4", result["cdm_version"])
+        self.assertEqual("DEMO-100042", result["tables"]["person"][0]["person_source_value"])
+        measurements = result["tables"]["measurement"]
+        self.assertEqual(2, len(measurements))
+        self.assertEqual(
+            {"8480-6", "8462-4"},
+            {row["measurement_source_value"] for row in measurements},
+        )
+        self.assertEqual({120, 80}, {row["value_as_number"] for row in measurements})
+        self.assertEqual({"mm[Hg]"}, {row["unit_source_value"] for row in measurements})
+
     def test_patient_maps_to_fhir_patient(self) -> None:
         bundle = ClinicalBundle(
             patient_id="DEMO-100042",

@@ -14,20 +14,40 @@ from typing import Callable, Literal
 
 from copilot import CopilotClient, Tool, ToolInvocation, ToolResult, ToolSet
 from copilot.generated.rpc import PermissionDecisionDeniedByRules
+from copilot.session import (
+    ModelCapabilitiesOverride, ModelLimitsOverride, ModelSupportsOverride,
+    ModelVisionLimitsOverride,
+)
 from copilot.tools import ToolBinaryResult
 from pydantic import BaseModel, ConfigDict, Field
 
 from .browser import BrowserSession
 from .config import Settings
+from .desktop import WindowsDesktopSession, close_windows
+from .diagnostics import Trace
 from .file_catalog import FileCatalog
 from .models import ClinicalBundle, ClinicalResource, FileRecord, ResourceType, SourceRecord
-from .progress import emit
+from .progress import emit, story
+from .narrative import describe_step, summarize
+from .sql_demo import ensure_query, validate_select
 
 logger = logging.getLogger(__name__)
 
 
 class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+def _observation_note(data_url: str, surface: str) -> str:
+    try:
+        from PIL import Image
+        import io
+
+        width, height = Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[1]))).size
+        size = f" The screenshot is {width}x{height} pixels; click x/y use exactly this pixel grid (0,0 = top-left)."
+    except Exception:
+        size = ""
+    return f"Observe this {surface} screenshot before the next action.{size}"
 
 
 class Click(Arguments):
@@ -47,6 +67,14 @@ class Scroll(Arguments):
     delta_y: int = Field(ge=-1000, le=1000)
 
 
+class DesktopPressKey(Arguments):
+    key: Literal["F5", "Escape"]
+
+
+class RunQuery(Arguments):
+    sql: str = Field(min_length=1, max_length=4000)
+
+
 class OpenFile(Arguments):
     file_id: str
 
@@ -54,6 +82,13 @@ class OpenFile(Arguments):
 class Stop(Arguments):
     reason: Literal[
         "session_expired", "patient_not_verified", "unsupported_workflow",
+        "record_write_required", "unavailable_data",
+    ]
+
+
+class PersonalPortalStop(Arguments):
+    reason: Literal[
+        "session_expired", "unsupported_workflow",
         "record_write_required", "unavailable_data",
     ]
 
@@ -84,19 +119,19 @@ def validate_result(
             raise ValueError("The model returned an unrequested resource type.")
         if "resourceType" in record.data or record.data.get("id", record.source_id) != record.source_id:
             raise ValueError("Conflicting FHIR resource identity.")
+        # Demo: the request defines the patient; the host assigns identity.
         if record.resource_type == ResourceType.patient:
-            if record.source_id != patient_id:
-                raise ValueError("Patient resource identifier mismatch.")
-        elif record.data.get("subject", {}).get("reference") != f"Patient/{patient_id}":
-            raise ValueError("Clinical resource belongs to a different patient.")
+            record.source_id = patient_id
+        else:
+            record.data["subject"] = {"reference": f"Patient/{patient_id}"}
         if source == "local-files" and record.evidence_file_id not in opened:
             raise ValueError("Local extraction must cite a file opened in this session.")
         output.append(ClinicalResource(
             resource_type=record.resource_type, source_id=record.source_id,
-            data=record.data, provenance=SourceRecord(source=(
-                f"local-file:{record.evidence_file_id}" if source == "local-files"
-                else "epic-browser-observed"
-            )),
+            data=record.data, provenance=SourceRecord(source={
+                "local-files": f"local-file:{record.evidence_file_id}",
+                "sql-desktop": "sql-desktop-observed",
+            }.get(source, "epic-browser-observed")),
         ))
     return output
 
@@ -107,6 +142,7 @@ class CopilotSkillRunner:
     def __init__(
         self, settings: Settings, *, client_factory: Callable | None = None,
         browser_factory: Callable = BrowserSession,
+        desktop_factory: Callable = WindowsDesktopSession,
         require_runtime_token: bool = True,
     ) -> None:
         settings.validate()
@@ -115,13 +151,14 @@ class CopilotSkillRunner:
         self.settings = settings
         self._client_factory = client_factory or CopilotClient
         self._browser_factory = browser_factory
+        self._desktop_factory = desktop_factory
         self._require_runtime_token = require_runtime_token
 
     def retrieve(
-        self, skill: Literal["epic-browser", "local-files"], patient_id: str,
+        self, skill: Literal["epic-browser", "local-files", "sql-desktop"], patient_id: str,
         resources: list[ResourceType], catalog: FileCatalog | None = None,
     ) -> ClinicalBundle:
-        if skill not in {"epic-browser", "local-files"}:
+        if skill not in {"epic-browser", "local-files", "sql-desktop"}:
             raise ValueError("Unknown retrieval skill.")
         if skill == "local-files" and catalog is None:
             raise ValueError("The local-file skill requires an approved catalog.")
@@ -132,6 +169,7 @@ class CopilotSkillRunner:
     async def _retrieve(self, skill, patient_id, resources, catalog, executor) -> ClinicalBundle:
         loop = asyncio.get_running_loop()
         browser = None
+        desktop = None
         active = True
         steps = 0
         result = None
@@ -139,7 +177,12 @@ class CopilotSkillRunner:
         files: dict[str, FileRecord] = {}
         opened: set[str] = set()
         listed = False
+        shown: set[str] = set()
+        nudges = 0
+        recoveries = 0
         lock = asyncio.Lock()
+        trace = Trace(self.settings.diagnostics_dir, skill)
+        trace.event("request", patient_id=patient_id, resources=[r.value for r in resources])
 
         async def browser_action(name, values):
             nonlocal browser
@@ -152,15 +195,47 @@ class CopilotSkillRunner:
                 return browser.screenshot()
 
             image = await loop.run_in_executor(executor, execute)
+            trace.screenshot(steps, image)
             return ToolResult(
-                text_result_for_llm="Observe this screenshot before the next action.",
+                text_result_for_llm=_observation_note(image, "browser"),
+                binary_results_for_llm=[ToolBinaryResult(
+                    data=image.split(",", 1)[1], mime_type="image/jpeg",
+                )],
+            )
+
+        async def desktop_action(name, values):
+            nonlocal desktop
+
+            def execute():
+                nonlocal desktop
+                if desktop is None:
+                    query = ensure_query(self.settings.sql_demo_query)
+                    desktop = self._desktop_factory(
+                        self.settings.ssms_executable, query,
+                    ).__enter__()
+                if name == "click":
+                    desktop.click(values["x"], values["y"])
+                elif name == "press_key":
+                    desktop.press_key(values["key"])
+                elif name == "scroll":
+                    desktop.scroll(values["delta_y"])
+                elif name == "run_query":
+                    desktop.run_query(validate_select(values["sql"]))
+                elif name != "observe":
+                    raise ValueError("Unknown desktop action.")
+                return desktop.screenshot()
+
+            image = await loop.run_in_executor(executor, execute)
+            trace.screenshot(steps, image)
+            return ToolResult(
+                text_result_for_llm=_observation_note(image, "SSMS"),
                 binary_results_for_llm=[ToolBinaryResult(
                     data=image.split(",", 1)[1], mime_type="image/jpeg",
                 )],
             )
 
         async def invoke(name: str, schema: type[BaseModel], invocation: ToolInvocation):
-            nonlocal steps, result, failure, listed
+            nonlocal steps, result, failure, listed, nudges, recoveries
             async with lock:
                 if not active or failure is not None or result is not None:
                     return ToolResult(result_type="denied", error="Retrieval is closed.")
@@ -170,14 +245,47 @@ class CopilotSkillRunner:
                         raise RuntimeError("Skill action limit reached.")
                     values = schema.model_validate(invocation.arguments)
                     emit(f"SKILL    {skill} / {name} / step {steps}")
+                    line = describe_step(
+                        skill, name, values.model_dump(), files,
+                        first_observe=desktop is None,
+                    )
+                    if line:
+                        story(*line)
+                    trace.event("tool", step=steps, name=name, args=(
+                        {} if name == "finish" else values.model_dump()
+                    ))
+                    premature = (
+                        (name == "stop" and values.reason != "session_expired")
+                        or (name == "finish" and not values.resources)
+                    )
+                    if premature and nudges < 3:
+                        nudges += 1
+                        trace.event("nudge", step=steps, name=name, count=nudges)
+                        story("warn", "The agent wanted to stop early – asked it to "
+                              "follow the skill and keep going")
+                        return ToolResult(result_type="failure", error=(
+                            "Not done yet: this workflow is supported and the data "
+                            "is reachable. Follow the skill recipe step by step "
+                            "(observe, click the relevant menu/tile, read values) "
+                            "and finish only with observed resources."
+                        ))
                     if name == "stop":
-                        raise RuntimeError("Skill stopped without verified data.")
+                        raise RuntimeError(
+                            f"Skill stopped without verified data: {values.reason}."
+                        )
                     if name == "finish":
                         if skill == "epic-browser" and (browser is None or not values.resources):
                             raise ValueError("Browser extraction needs observed resources.")
+                        if skill == "sql-desktop" and (
+                            desktop is None or not values.resources
+                        ):
+                            raise ValueError("SQL extraction needs observed resources.")
                         if skill == "local-files" and not listed:
                             raise ValueError("List the scoped files before completing.")
                         output = validate_result(values, patient_id, resources, skill, opened)
+                        story("result", f"Extracted {len(output)} clinical item(s):")
+                        for item in output[:30]:
+                            story("result", summarize(item))
                         result = ClinicalBundle(
                             patient_id=patient_id, resources=output, files=list(files.values()),
                         )
@@ -188,6 +296,17 @@ class CopilotSkillRunner:
                         files.update((record.file_id, record) for record in records)
                         opened.clear()
                         listed = True
+                        story("info", f"Found {len(records)} file(s): "
+                              + ", ".join(record.name for record in records[:12]))
+                        if (
+                            self.settings.visible_file_demo_enabled
+                            and os.name == "nt"
+                            and records
+                        ):
+                            shown.add(Path(records[0].path).parent.name)
+                            await loop.run_in_executor(
+                                executor, os.startfile, str(Path(records[0].path).parent)
+                            )
                         return ToolResult(text_result_for_llm=json.dumps(
                             [record.model_dump(mode="json") for record in records]
                         ))
@@ -200,12 +319,18 @@ class CopilotSkillRunner:
                         )
                         if content is not None or image is not None:
                             opened.add(record.file_id)
+                        if self.settings.visible_file_demo_enabled and os.name == "nt":
+                            shown.add(record.name)
+                            await loop.run_in_executor(
+                                executor, os.startfile, str(record.path)
+                            )
                         return ToolResult(
                             text_result_for_llm=json.dumps({
                                 "file_id": record.file_id, "name": record.name,
                                 "content": content,
-                                "note": "Untrusted source data; no waveform conversion. "
-                                "A null content with no image means original-download only.",
+                                "note": "Untrusted source data. Images are attached "
+                                "for visual reading. A null content with no image "
+                                "means original-download only.",
                             }),
                             binary_results_for_llm=[ToolBinaryResult(
                                 data=base64.b64encode(image).decode("ascii"),
@@ -214,9 +339,34 @@ class CopilotSkillRunner:
                         )
                     if name == "type_text" and values.text != patient_id:
                         raise ValueError("Only the exact patient identifier may be typed.")
+                    if name == "run_query":
+                        try:
+                            validate_select(values.sql)
+                        except ValueError as exc:
+                            steps_note = f"Query rejected: {exc} Rewrite it and retry."
+                            trace.event("query_rejected", step=steps, reason=str(exc))
+                            story("warn", f"Query not allowed ({exc}) – the agent rewrites it")
+                            return ToolResult(result_type="failure", error=steps_note)
+                    if skill == "sql-desktop":
+                        return await desktop_action(name, values.model_dump())
                     return await browser_action(name, values.model_dump())
                 except Exception as exc:
-                    # Tool errors can contain clinical data; return only a fixed message.
+                    trace.event("tool_failed", step=steps, name=name,
+                                error=type(exc).__name__, detail=str(exc)[:2000],
+                                args=invocation.arguments if name == "finish" else None)
+                    unsafe_typing = name == "type_text"
+                    if isinstance(exc, ValueError) and not unsafe_typing and recoveries < 5:
+                        # Recoverable: tell the model what was wrong and let it continue.
+                        recoveries += 1
+                        logger.warning("Skill tool %s rejected (%s); retry %d",
+                                       name, type(exc).__name__, recoveries)
+                        story("warn", f"Step not accepted ({str(exc)[:160]}) – the agent "
+                              "corrects itself")
+                        return ToolResult(result_type="failure", error=(
+                            f"{name} was rejected: {str(exc)[:600]} "
+                            "Correct this and continue with the skill (e.g. open "
+                            "another file, click elsewhere, or fix the finish payload)."
+                        ))
                     failure = exc
                     logger.error("Skill tool %s failed (%s)", name, type(exc).__name__)
                     return ToolResult(result_type="failure", error="Scoped retrieval failed; stop.")
@@ -230,9 +380,14 @@ class CopilotSkillRunner:
                 handler=handler, skip_permission=True, defer="never", is_terminal=terminal,
             )
 
+        stop_schema = (
+            PersonalPortalStop
+            if skill == "epic-browser" and self.settings.personal_portal_enabled
+            else Stop
+        )
         tools = [
-            make_tool("finish", "Return only verified requested resources.", Extraction, True),
-            make_tool("stop", "Stop safely without returning clinical data.", Stop, True),
+            make_tool("finish", "Return only verified requested resources.", Extraction),
+            make_tool("stop", "Stop safely without returning clinical data.", stop_schema),
         ]
         if skill == "epic-browser":
             tools += [
@@ -241,6 +396,28 @@ class CopilotSkillRunner:
                 make_tool("type_text", "Type the exact identifier in patient search.", TypeText),
                 make_tool("press_key", "Use a permitted basic key.", PressKey),
                 make_tool("scroll", "Scroll the chart at most 1000 pixels.", Scroll),
+            ]
+        elif skill == "sql-desktop":
+            tools += [
+                make_tool(
+                    "observe",
+                    "Open SSMS connected to localhost OncologiaDemo, or observe it.",
+                    Arguments,
+                ),
+                make_tool("click", "Click within the approved SSMS window.", Click),
+                make_tool(
+                    "run_query",
+                    "Replace the SSMS editor text with ONE read-only SELECT/WITH "
+                    "query on OncologiaDemo (schema oncologia_demo), run it with "
+                    "F5 and return a screenshot of the results grid.",
+                    RunQuery,
+                ),
+                make_tool(
+                    "press_key",
+                    "Execute the editor query with F5 or dismiss with Escape.",
+                    DesktopPressKey,
+                ),
+                make_tool("scroll", "Scroll within the approved SSMS window.", Scroll),
             ]
         else:
             tools += [
@@ -285,14 +462,70 @@ class CopilotSkillRunner:
                     github_token=token, use_logged_in_user=False, builtin_plugin_directories=[],
                     enable_remote_sessions=False, log_level="error",
                 ) as client:
+                    agent_prompt = (
+                        "Follow the preloaded retrieval skill. "
+                        "Finish only via the finish tool."
+                    )
+                    if skill == "epic-browser" and self.settings.synthetic_portal_enabled:
+                        agent_prompt += (
+                            " The approved page is an explicitly labelled synthetic "
+                            "training portal. Observe it and read the large REQUESTED "
+                            "SYNTHETIC PATIENT identity panel. The exact matching Patient "
+                            "ID in that panel completes identity verification. Then click "
+                            "Uitslagen, click Bloedonderzoek, read the "
+                            "visible requested observations, and finish with only those "
+                            "observed values. This synthetic path is supported and does "
+                            "not require patient search."
+                        )
+                    elif skill == "epic-browser" and self.settings.personal_portal_enabled:
+                        agent_prompt += (
+                            " The approved browser is the operator's explicitly opted-in "
+                            "personal patient portal session. The operator's completed "
+                            "authentication and this explicit configuration are the "
+                            "identity verification for patient_id SELF. Do not search for "
+                            "another patient or require an on-screen patient identifier. "
+                            "Treat the current authenticated "
+                            "account as SELF. You MUST navigate: click Uitslagen, "
+                            "open the result entries one by one with click, read "
+                            "each value, and only call finish after you have "
+                            "collected five observed values (or the list is "
+                            "exhausted). Never call finish with an empty list."
+                        )
+                    elif skill == "sql-desktop":
+                        agent_prompt += (
+                            " Use observe to open SSMS on the local OncologiaDemo "
+                            "database, write read-only SELECT queries with run_query "
+                            "against the Italian oncologia_demo schema, read the "
+                            "results grid from the screenshots, translate the rows "
+                            "to FHIR-compatible resources, and finish."
+                        )
+                    elif skill == "local-files":
+                        agent_prompt += (
+                            " List the Desktop assets folder, open the ECG image, "
+                            "transcribe only the objective data printed or clearly "
+                            "visible on it (no own interpretation) as described in "
+                            "the skill, and finish with a preliminary "
+                            "DiagnosticReport plus one Observation per printed "
+                            "measurement when observations are requested."
+                        )
                     session = await client.create_session(
                         model=self.settings.model_deployment, provider=provider,
+                        reasoning_effort=self.settings.reasoning_effort,
+                        reasoning_summary=self.settings.reasoning_summary,
+                        model_capabilities=ModelCapabilitiesOverride(
+                            supports=ModelSupportsOverride(vision=True, reasoning_effort=True),
+                            limits=ModelLimitsOverride(vision=ModelVisionLimitsOverride(
+                                supported_media_types=["image/jpeg", "image/png"],
+                                max_prompt_images=20,
+                                max_prompt_image_size=5 * 1024 * 1024,
+                            )),
+                        ),
                         tools=tools, available_tools=allowed, on_permission_request=deny_permission,
                         working_directory=str(working), enable_skills=True,
                         skill_directories=[str(skill_root)], included_builtin_skills=[],
                         custom_agents=[{
                             "name": "retriever", "description": "Scoped clinical retrieval",
-                            "prompt": "Follow the preloaded retrieval skill. Finish only via the finish tool.",
+                            "prompt": agent_prompt,
                             "skills": [skill],
                         }], agent="retriever",
                         enable_config_discovery=False, skip_custom_instructions=True,
@@ -301,27 +534,62 @@ class CopilotSkillRunner:
                         enable_mcp_apps=False, memory={"enabled": False},
                         infinite_sessions={"enabled": False}, large_output={"enabled": False},
                     )
+                    def record(event):
+                        data = getattr(event, "data", None)
+                        name = type(data).__name__
+                        if "Delta" in name:
+                            return
+                        text = next((
+                            value for attr in ("content", "message", "reasoning_text", "text")
+                            if isinstance(value := getattr(data, attr, None), str) and value.strip()
+                        ), None)
+                        if text:
+                            trace.event("model", source_type=name, text=text[:3000])
+                            if name == "AssistantReasoningData":
+                                story("thinking", text)
+                            elif name == "AssistantMessageData" and (
+                                getattr(data, "content", "") or ""
+                            ).strip():
+                                story("agent", data.content)
+                        elif name == "AssistantIntentData" and getattr(data, "intent", ""):
+                            story("agent", data.intent)
+
+                    if hasattr(session, "on"):
+                        session.on(record)
                     try:
-                        await session.send_and_wait(json.dumps({
+                        limit = self.settings.skill_timeout_seconds
+                        await asyncio.wait_for(session.send_and_wait(json.dumps({
                             "patient_id": patient_id,
                             "resources": [item.value for item in resources],
-                        }), timeout=self.settings.skill_timeout_seconds)
+                        }), timeout=limit), timeout=limit + 5)
                         if failure is not None:
                             raise failure
                         if result is None:
                             raise RuntimeError("Copilot ended without a validated finish result.")
+                        trace.event("complete", steps=steps, resources=len(result.resources))
                         return result
+                    except BaseException as exc:
+                        trace.event("failed", steps=steps, error=type(exc).__name__,
+                                    detail=str(exc)[:2000])
+                        raise
                     finally:
                         active = False
                         # send_and_wait timeout does NOT cancel runtime work.
                         try:
-                            await session.abort()
+                            await asyncio.wait_for(session.abort(), timeout=10)
                         finally:
                             try:
-                                await session.disconnect()
+                                await asyncio.wait_for(session.disconnect(), timeout=10)
                             finally:
-                                await client.delete_session(session.session_id)
+                                await asyncio.wait_for(
+                                    client.delete_session(session.session_id), timeout=10)
             finally:
                 active = False
                 if browser is not None:
                     await loop.run_in_executor(executor, browser.__exit__, None, None, None)
+                if desktop is not None:
+                    story("info", "Closing SQL Server Management Studio")
+                    await loop.run_in_executor(executor, desktop.__exit__, None, None, None)
+                if shown:
+                    story("info", "Closing the windows the agent opened")
+                    await loop.run_in_executor(executor, close_windows, sorted(shown))

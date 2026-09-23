@@ -65,9 +65,39 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Observations WHERE ObservationId=1)
 INSERT dbo.Observations VALUES (1,N'DEMO-100042',N'8480-6',N'Synthetic systolic blood pressure',120,N'mm[Hg]','2026-09-10T09:10:00');
 IF NOT EXISTS (SELECT 1 FROM dbo.Observations WHERE ObservationId=2)
 INSERT dbo.Observations VALUES (2,N'DEMO-100042',N'8462-4',N'Synthetic diastolic blood pressure',80,N'mm[Hg]','2026-09-10T09:10:00');
+
+IF OBJECT_ID(N'dbo.Pazienti', N'U') IS NULL
+CREATE TABLE dbo.Pazienti (
+    IdPaziente nvarchar(64) NOT NULL PRIMARY KEY,
+    NomeCompleto nvarchar(100) NOT NULL,
+    DataNascita date NOT NULL,
+    Sesso nvarchar(20) NOT NULL,
+    Sintetico bit NOT NULL
+);
+IF OBJECT_ID(N'dbo.RisultatiLaboratorio', N'U') IS NULL
+CREATE TABLE dbo.RisultatiLaboratorio (
+    IdRisultato int NOT NULL PRIMARY KEY,
+    IdPaziente nvarchar(64) NOT NULL REFERENCES dbo.Pazienti(IdPaziente),
+    CodiceLOINC nvarchar(20) NOT NULL,
+    Descrizione nvarchar(100) NOT NULL,
+    ValoreNumerico decimal(10,2) NOT NULL,
+    UnitaMisura nvarchar(20) NOT NULL,
+    DataRilevazione datetime2 NOT NULL
+);
+IF NOT EXISTS (SELECT 1 FROM dbo.Pazienti WHERE IdPaziente=N'DEMO-100042')
+INSERT dbo.Pazienti VALUES (
+    N'DEMO-100042', N'Giulia Bianchi (sintetico)', '1984-05-17', N'F', 1
+);
+IF NOT EXISTS (SELECT 1 FROM dbo.RisultatiLaboratorio WHERE IdRisultato=101)
+INSERT dbo.RisultatiLaboratorio VALUES
+    (101,N'DEMO-100042',N'718-7',N'Emoglobina',8.60,N'mmol/L','2026-09-18T08:30:00'),
+    (102,N'DEMO-100042',N'6690-2',N'Leucociti',6.40,N'10*9/L','2026-09-18T08:30:00'),
+    (103,N'DEMO-100042',N'1988-5',N'Proteina C reattiva',2.00,N'mg/L','2026-09-18T08:30:00'),
+    (104,N'DEMO-100042',N'2160-0',N'Creatinina',78.00,N'umol/L','2026-09-18T08:30:00'),
+    (105,N'DEMO-100042',N'2345-7',N'Glucosio',5.10,N'mmol/L','2026-09-18T08:30:00');
 '@
     $command.ExecuteNonQuery() | Out-Null
-    $command.CommandText = 'SELECT COUNT(*) FROM dbo.Observations WHERE PatientId = N''DEMO-100042'''
+    $command.CommandText = 'SELECT COUNT(*) FROM dbo.RisultatiLaboratorio WHERE IdPaziente = N''DEMO-100042'''
     $count = $command.ExecuteScalar()
     $command.Dispose()
 } finally {
@@ -75,6 +105,6 @@ INSERT dbo.Observations VALUES (2,N'DEMO-100042',N'8462-4',N'Synthetic diastolic
     if ($impersonation) { $impersonation.Undo(); $impersonation.Dispose() }
     if ($token -ne [IntPtr]::Zero) { [DemoSqlLogon]::CloseHandle($token) | Out-Null }
 }
-@{ database = 'EpicDemo'; synthetic = $true; observations = $count } |
+@{ database = 'EpicDemo'; schema = 'Italian'; synthetic = $true; observations = $count } |
     ConvertTo-Json | Set-Content -LiteralPath 'C:\DemoTools\sql-database-status.json' -Encoding UTF8
 Write-Output ("EpicDemo synthetic database ready; observation rows: " + $count)

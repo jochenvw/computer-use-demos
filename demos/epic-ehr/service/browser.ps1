@@ -3,12 +3,19 @@ param(
     [Parameter(Mandatory)]
     [uri]$EpicUrl,
     [ValidateRange(1, 65535)]
-    [int]$DebugPort = 9222
+    [int]$DebugPort = 9222,
+    [switch]$AllowLoopbackTraining
 )
 
 $ErrorActionPreference = 'Stop'
-if ($EpicUrl.Scheme -ne 'https' -or $EpicUrl.UserInfo) {
-    throw 'EpicUrl must be an HTTPS URL with no embedded credentials.'
+$loopbackTraining = (
+    $AllowLoopbackTraining -and
+    $EpicUrl.Scheme -eq 'http' -and
+    $EpicUrl.Host -in @('127.0.0.1', 'localhost') -and
+    $EpicUrl.Port -gt 0
+)
+if (($EpicUrl.Scheme -ne 'https' -and -not $loopbackTraining) -or $EpicUrl.UserInfo) {
+    throw 'EpicUrl must be HTTPS, or explicit loopback HTTP for synthetic training.'
 }
 $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
 if (-not (Test-Path -LiteralPath $edge)) {

@@ -25,14 +25,42 @@ MAX_SKILL_TEXT_CHARS = 100_000
 
 
 class FileCatalog:
-    def __init__(self, roots: tuple[Path, ...]) -> None:
+    def __init__(
+        self, roots: tuple[Path, ...], shared_roots: tuple[Path, ...] = (),
+    ) -> None:
         self._roots = tuple(root.resolve() for root in roots)
+        # Flat demo folders (e.g. Desktop\assets) shared by every request.
+        self._shared = tuple(root.resolve() for root in shared_roots)
+
+    def _record(self, resolved: Path) -> FileRecord:
+        digest = hashlib.sha256()
+        with resolved.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return FileRecord(
+            name=resolved.name,
+            media_type=ALLOWED_EXTENSIONS.get(resolved.suffix.lower())
+            or mimetypes.guess_type(resolved.name)[0] or "application/octet-stream",
+            size_bytes=resolved.stat().st_size,
+            sha256=digest.hexdigest(),
+            path=str(resolved),
+        )
 
     def find(self, patient_id: str) -> list[FileRecord]:
         if not SAFE_PATIENT_ID.fullmatch(patient_id):
             raise ValueError("patient_id contains unsupported characters.")
 
         records: list[FileRecord] = []
+        for root in self._shared:
+            if not root.is_dir():
+                raise RuntimeError("An approved shared asset folder is missing.")
+            for path in sorted(root.iterdir()):
+                if not path.is_file() or path.suffix.lower() not in ALLOWED_EXTENSIONS:
+                    continue
+                resolved = path.resolve()
+                if resolved.parent != root:
+                    raise ValueError("A file link escaped the shared asset folder.")
+                records.append(self._record(resolved))
         for root in self._roots:
             if not root.is_dir():
                 raise RuntimeError("An approved file root is missing or inaccessible.")
@@ -47,22 +75,7 @@ class FileCatalog:
                 resolved = path.resolve()
                 if patient_root not in resolved.parents:
                     raise ValueError("A file link escaped the patient directory.")
-                digest = hashlib.sha256()
-                with resolved.open("rb") as stream:
-                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                        digest.update(chunk)
-                records.append(
-                    FileRecord(
-                        name=resolved.name,
-                        media_type=ALLOWED_EXTENSIONS.get(
-                            resolved.suffix.lower()
-                        ) or mimetypes.guess_type(resolved.name)[0]
-                        or "application/octet-stream",
-                        size_bytes=resolved.stat().st_size,
-                        sha256=digest.hexdigest(),
-                        path=str(resolved),
-                    )
-                )
+                records.append(self._record(resolved))
         return records
 
     def verify(self, record: FileRecord, patient_id: str) -> Path:
@@ -78,6 +91,8 @@ class FileCatalog:
 
     def _contained_path(self, record: FileRecord, patient_id: str) -> Path:
         resolved = Path(record.path).resolve(strict=True)
+        if resolved.parent in self._shared:
+            return resolved
         if any(
             (root / patient_id).resolve() in resolved.parents
             and root in (root / patient_id).resolve().parents

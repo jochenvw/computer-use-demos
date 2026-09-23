@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
 import secrets
 import hashlib
+import logging
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .adapters.computer_use import ComputerUseEpicAdapter
@@ -11,11 +13,13 @@ from .adapters.fixture import FixtureEpicAdapter
 from .audit import AuditWriter
 from .cache import RetrievalCache
 from .config import Settings
+from .diagnostics import latest as latest_traces
 from .file_catalog import FileCatalog
-from .formats import fhir_bundle, fhir_xml, hl7_oru, ndjson, normalized_json
+from .formats import fhir_bundle, fhir_xml, hl7_oru, ndjson, normalized_json, omop_json
 from .jobs import JobService, ServiceDrainingError
 from .models import JobStatus, OutputFormat, RetrievalRequest
 from .readiness import check_readiness
+from .transform import transform
 
 settings = Settings.from_env()
 settings.validate()
@@ -26,7 +30,7 @@ adapter = (
 )
 jobs = JobService(
     adapter=adapter,
-    file_catalog=FileCatalog(settings.file_roots),
+    file_catalog=FileCatalog(settings.file_roots, settings.asset_roots),
     audit=AuditWriter(settings.audit_path),
     cache=RetrievalCache(
         max_entries=settings.cache_max_entries, ttl_seconds=settings.cache_ttl_seconds,
@@ -38,6 +42,11 @@ jobs = JobService(
             "local-files", patient_id, resources, catalog,
         )
     ) if isinstance(adapter, ComputerUseEpicAdapter) else None,
+    database_retriever=(
+        adapter.retrieve_sql
+        if isinstance(adapter, ComputerUseEpicAdapter)
+        else None
+    ),
 )
 app = FastAPI(
     title="Epic EHR Data Adapter Demo",
@@ -99,6 +108,30 @@ def drain(
             detail="Active jobs did not drain before the timeout; job acceptance resumed.",
         )
     return {"status": "drained", **jobs.service_status()}
+
+
+@app.get("/v1/admin/diagnostics")
+def diagnostics(
+    runs: int = Query(default=1, ge=1, le=10),
+    caller_id: str = Depends(authorize),
+) -> dict:
+    """Operator-only trace of the latest skill runs (tool calls, errors, timings)."""
+    del caller_id
+    return {"runs": latest_traces(settings.diagnostics_dir, runs)}
+
+
+@app.get("/v1/admin/diagnostics/{run}/{name}")
+def diagnostic_screenshot(run: str, name: str, caller_id: str = Depends(authorize)):
+    del caller_id
+    root = settings.diagnostics_dir
+    if root is None or not re.fullmatch(r"[0-9T]+-[a-z-]+", run) or not re.fullmatch(
+        r"step-\d{3}\.jpg", name
+    ):
+        raise HTTPException(status_code=404, detail="Not found.")
+    path = root / run / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found.")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.post("/v1/retrieval-jobs", status_code=status.HTTP_202_ACCEPTED)
@@ -168,11 +201,37 @@ def get_result(
             return Response(hl7_oru(job.bundle), media_type="application/hl7-v2", headers=headers)
         if output_format == OutputFormat.ndjson:
             return Response(ndjson(job.bundle), media_type="application/x-ndjson", headers=headers)
+        if output_format == OutputFormat.omop:
+            return JSONResponse(omop_json(job.bundle), headers=headers)
         return JSONResponse(normalized_json(job.bundle, base), headers=headers)
     except ValueError as exc:
         raise HTTPException(
             status_code=422, detail="Retrieved data cannot be represented in the requested format.",
         ) from exc
+
+
+@app.post("/v1/retrieval-jobs/{job_id}/transform")
+def transform_result(
+    job_id: str, body: dict = Body(...), caller_id: str = Depends(authorize),
+) -> JSONResponse:
+    del caller_id
+    try:
+        job = jobs.get(job_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if job.status != JobStatus.complete or job.bundle is None:
+        raise HTTPException(status_code=409, detail=f"Job is {job.status.value}.")
+    try:
+        mapped = transform(
+            settings, normalized_json(job.bundle, f"/v1/retrieval-jobs/{job_id}"),
+            body.get("schema", ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - never leak upstream details
+        logging.getLogger(__name__).error("Schema mapping failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="Schema mapping failed.") from exc
+    return JSONResponse(mapped, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/v1/retrieval-jobs/{job_id}/files/{file_id}")

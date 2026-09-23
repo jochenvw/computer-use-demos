@@ -8,7 +8,13 @@ from unittest.mock import Mock
 from epic_adapter.audit import AuditWriter
 from epic_adapter.file_catalog import FileCatalog
 from epic_adapter.jobs import JobService, ServiceDrainingError
-from epic_adapter.models import ClinicalResource, ResourceType, RetrievalRequest, SourceRecord
+from epic_adapter.models import (
+    ClinicalBundle,
+    ClinicalResource,
+    ResourceType,
+    RetrievalRequest,
+    SourceRecord,
+)
 
 
 class JobRoutingTests(unittest.TestCase):
@@ -48,6 +54,35 @@ class JobRoutingTests(unittest.TestCase):
         self.run_job("both")
         self.adapter.retrieve.assert_called_once()
         self.catalog.find.assert_called_once()
+
+    def test_sql_routes_only_to_database_retriever(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        adapter = Mock()
+        database = Mock(return_value=ClinicalBundle(
+            patient_id="DEMO-100042", resources=[], files=[],
+        ))
+        catalog = Mock()
+        jobs = JobService(
+            adapter,
+            catalog,
+            AuditWriter(root / "audit.jsonl"),
+            database_retriever=database,
+        )
+
+        job = jobs.create(RetrievalRequest(
+            patient_id="DEMO-100042", source="sql",
+        ), "test")
+        for _ in range(100):
+            if job.status in {"complete", "failed"}:
+                break
+            time.sleep(0.01)
+
+        self.assertEqual("complete", job.status)
+        database.assert_called_once()
+        adapter.retrieve.assert_not_called()
+        catalog.find.assert_not_called()
 
     def test_observation_code_filter_ignores_malformed_shapes(self):
         directory = tempfile.TemporaryDirectory()

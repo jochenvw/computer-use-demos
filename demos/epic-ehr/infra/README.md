@@ -118,18 +118,32 @@ Ctrl+C in the tunnel terminal closes the connection.
 
 ## Try the agent and local tester
 
-The VM desktop has shortcuts for:
+The VM desktop is kept demo-clean: **Epic Live Demo** (opens the dedicated
+browser and starts the visible live API), **Microsoft Edge**, **SQL Server
+Management Studio** and the **assets** folder used by the files scenario.
 
-- **Epic Agent Local Only**: safe fixture API, no model/browser calls.
-- **Epic Agent with Tunnel**: agent plus owned authenticated devtunnel.
-- **Configure Epic Agent**: opens the private `.env`.
-- **Epic API Tester**: optional tester running on the VM itself.
-- **SQL Server Management Studio**, **Synthetic SQL Demo.sql**, and a short
-  **READ ME FIRST.txt**.
+Operator-only items live in `C:\EpicDemo`: **Configure Epic Agent** (opens the
+private `.env`), **READ ME FIRST.txt** and a sample query. `service\run.ps1`
+(`-WithTunnel` optional) and `service\testing.ps1` still start the local-only
+agent, the tunnel agent, or a VM-side tester.
 
 Inside the RDP session, first run `devtunnel user login` manually. Start
-**Epic Agent with Tunnel** and copy its actual HTTPS URL. It cannot provide a
+`service\run.ps1 -WithTunnel` and copy its actual HTTPS URL. It cannot provide a
 working remote URL before tunnel authentication and startup succeed.
+
+For the full no-copy/paste startup from the repository root:
+
+```powershell
+.\demos\epic-ehr\start-demo.ps1 -SubscriptionId $subscription
+```
+
+The command starts the VM, refreshes the stable tunnel, opens Bastion RDP, and
+starts the local tester. It uses the locally signed-in Dev Tunnel CLI to issue
+fresh scoped host and connect tokens, stores them using user-bound DPAPI, and
+sends only the host token through protected Azure Run Command parameters. The
+tunnel host runs as a SYSTEM startup task and waits up to 30 minutes for the
+loopback API. It does not start or hide the agent. The agent remains a visible
+interactive process launched through **Epic Live Demo**.
 
 On your **local** machine:
 
@@ -138,11 +152,12 @@ On your **local** machine:
 # Open the printed local address, normally http://127.0.0.1:8765
 ```
 
-Paste the tunnel URL and the API bearer token from the VM's `.env` into the
-masked fields. If tunnel access requires a connect token, generate one using
-the devtunnel CLI for that tunnel and paste it into the separate masked field.
-The tester does not persist credentials and does not require wildcard CORS or
-an anonymous tunnel.
+When the protected local state is present, the tester opens automatically with
+the stable tunnel URL and uses the encrypted API and connect tokens server-side.
+The masked fields remain blank and no copy/paste is required. Pass
+`-ManualCredentials` only when intentionally testing another tunnel. The tester
+does not persist credentials and does not require wildcard CORS or an anonymous
+tunnel.
 
 **Quick BP** selects the synthetic BP panel. Repeat a request for a cache hit;
 check **Bypass cache** to run fresh work. **ECG file** selects the file source.

@@ -89,7 +89,12 @@
    `EPIC_BROWSER_CDP_URL`, and `MODEL_DEPLOYMENT`. Use `COPILOT_GITHUB_TOKEN` in
    isolated mode, or optional Azure BYOM via `DefaultAzureCredential` bearer
    token. Do not use Azure API keys.
-9. Run `service\tunnel.ps1` only for authorized synthetic API access. Never tunnel
+9. For repeatable demos, run `start-demo.ps1`. It starts the VM, refreshes scoped
+   tunnel credentials without displaying them, opens RDP, and starts the local
+   tester. In RDP, launch **Epic Live Demo** and complete the manual login. The
+   named private tunnel and encrypted local tester credentials remove all
+   URL/token copy-paste.
+10. Run `service\tunnel.ps1` only for ad-hoc authorized synthetic API access. Never tunnel
    the browser debugging port, commit `.env`, browser profiles, audit data, or
    runtime temp state, and do not claim live Epic/model verification unless an
    approved training-environment test was actually run.

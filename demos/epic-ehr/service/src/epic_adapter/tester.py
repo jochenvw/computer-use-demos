@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import argparse
 import base64
+import html
 import json
 import os
 import re
 import secrets
 import socket
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -16,7 +18,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
-FORMATS = {"fhir", "fhir-xml", "hl7", "json", "ndjson"}
+FORMATS = {"fhir", "fhir-xml", "hl7", "json", "ndjson", "omop"}
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -51,6 +53,8 @@ def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: st
         raise ValueError("Invalid job identifier.")
     if kind == "status":
         return f"/v1/retrieval-jobs/{job_id}"
+    if kind == "transform":
+        return f"/v1/retrieval-jobs/{job_id}/transform"
     if kind == "result":
         if output_format not in FORMATS:
             raise ValueError("Unsupported output format.")
@@ -62,7 +66,7 @@ def fixed_path(kind: str, job_id: str = "", file_id: str = "", output_format: st
     raise ValueError("Invalid relay request.")
 
 
-def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, body: bytes | None = None):
+def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, body: bytes | None = None, timeout: float = 15):
     headers = {"Authorization": " ".join(("Bearer", bearer)), "Accept": "*/*"}
     if tunnel_token:
         headers["X-Tunnel-Authorization"] = f"tunnel {tunnel_token}"
@@ -70,7 +74,7 @@ def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, bod
         headers["Content-Type"] = "application/json"
     request = Request(origin + path, data=body, headers=headers, method="POST" if body is not None else "GET")
     try:
-        with build_opener(NoRedirect).open(request, timeout=15) as response:
+        with build_opener(NoRedirect).open(request, timeout=timeout) as response:
             data = response.read(MAX_RESPONSE_BYTES + 1)
             if len(data) > MAX_RESPONSE_BYTES:
                 raise ValueError("Upstream response exceeded the 2 MiB relay limit.")
@@ -86,9 +90,17 @@ def request_upstream(origin: str, path: str, bearer: str, tunnel_token: str, bod
         raise ValueError("Cannot reach the tunnel. Check tunnel login, connect token, and URL.") from exc
 
 
-def make_handler(csrf: str, allow_loopback: bool):
+def make_handler(
+    csrf: str,
+    allow_loopback: bool,
+    configured_defaults: dict[str, str] | None = None,
+):
+    defaults = dict(configured_defaults or {})
+    default_origin = defaults.get("tunnel_url", "")
     page = (Path(__file__).parent / "static" / "tester.html").read_bytes().replace(
         b"CSRF_TOKEN", csrf.encode()
+    ).replace(
+        b"TUNNEL_URL_DEFAULT", html.escape(default_origin, quote=True).encode()
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -128,7 +140,7 @@ def make_handler(csrf: str, allow_loopback: bool):
             if not self._same_origin() or not secrets.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
                 self._send(403, b'{"error":"Forbidden request."}')
                 return
-            if self.path not in {"/api/jobs", "/api/status", "/api/result", "/api/file"}:
+            if self.path not in {"/api/jobs", "/api/status", "/api/result", "/api/file", "/api/transform"}:
                 self._send(404, b'{"error":"Not found."}')
                 return
             try:
@@ -148,8 +160,12 @@ def make_handler(csrf: str, allow_loopback: bool):
                     raise ValueError("Request body must be valid JSON.") from exc
                 if not isinstance(data, dict):
                     raise ValueError("Request body must be a JSON object.")
-                origin = upstream_origin(data["tunnel_url"], allow_loopback)
-                bearer, tunnel = data["bearer_token"], data.get("tunnel_token", "")
+                origin = upstream_origin(
+                    data.get("tunnel_url") or defaults.get("tunnel_url", ""),
+                    allow_loopback,
+                )
+                bearer = data.get("bearer_token") or defaults.get("bearer_token", "")
+                tunnel = data.get("tunnel_token") or defaults.get("tunnel_token", "")
                 if not isinstance(bearer, str) or not bearer:
                     raise ValueError("API bearer token is required.")
                 if not isinstance(tunnel, str):
@@ -165,8 +181,15 @@ def make_handler(csrf: str, allow_loopback: bool):
                     if not isinstance(request_body, dict):
                         raise ValueError("Retrieval request must be a JSON object.")
                     payload = json.dumps(request_body, separators=(",", ":")).encode()
+                elif kind == "transform":
+                    schema = data.get("schema")
+                    if not isinstance(schema, str) or not schema.strip():
+                        raise ValueError("Paste a target schema or ontology first.")
+                    payload = json.dumps({"schema": schema}).encode()
                 path = fixed_path(kind, data.get("job_id", ""), data.get("file_id", ""), data.get("format", "fhir"))
-                status, headers, response = request_upstream(origin, path, bearer, tunnel, payload)
+                status, headers, response = request_upstream(
+                    origin, path, bearer, tunnel, payload, 120 if kind == "transform" else 15,
+                )
                 if kind == "file" and 200 <= status < 300:
                     self.send_response(status)
                     self.send_header("Content-Type", headers.get("Content-Type", "application/octet-stream"))
@@ -194,9 +217,27 @@ def make_handler(csrf: str, allow_loopback: bool):
 def main():
     parser = argparse.ArgumentParser(description="Loopback-only Epic API tester.")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--open", action="store_true", help="Open the tester in the default browser.")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(secrets.token_urlsafe(32), os.getenv("EPIC_TESTER_ALLOW_LOOPBACK") == "1"))
-    print(f"Epic tester: http://127.0.0.1:{args.port}", flush=True)
+    defaults = {
+        "tunnel_url": os.getenv("EPIC_TESTER_TUNNEL_URL", ""),
+        "bearer_token": os.getenv("EPIC_TESTER_API_BEARER_TOKEN", ""),
+        "tunnel_token": os.getenv("EPIC_TESTER_TUNNEL_TOKEN", ""),
+    }
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", args.port),
+        make_handler(
+            secrets.token_urlsafe(32),
+            os.getenv("EPIC_TESTER_ALLOW_LOOPBACK") == "1",
+            defaults,
+        ),
+    )
+    address = f"http://127.0.0.1:{args.port}"
+    print(f"Epic tester: {address}", flush=True)
+    if defaults["tunnel_url"] and defaults["bearer_token"]:
+        print("Using protected local demo connection; credential fields may remain blank.", flush=True)
+    if args.open:
+        webbrowser.open(address)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

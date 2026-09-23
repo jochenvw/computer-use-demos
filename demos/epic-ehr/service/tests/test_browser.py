@@ -48,5 +48,9 @@ class BrowserGuardTests(unittest.TestCase):
         self.assertTrue(self.session.screenshot().startswith("data:image/jpeg;base64,"))
         self.assertEqual("css", self.page.screenshot.call_args.kwargs["scale"])
 
+    def test_shutdown_waits_for_route_handlers(self):
+        self.session.__exit__(None, None, None)
+        self.page.unroute_all.assert_called_once_with(behavior="wait")
+
     def test_origin_includes_nonstandard_port(self):
         self.assertEqual("https://example.invalid:8443", origin_of("https://example.invalid:8443/chart"))

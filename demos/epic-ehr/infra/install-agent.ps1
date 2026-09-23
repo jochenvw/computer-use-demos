@@ -96,9 +96,7 @@ EPIC_CACHE_MAX_BYTES=8388608
 
 $shell = New-Object -ComObject WScript.Shell
 foreach ($shortcut in @(
-    @{ Name = 'Epic Agent with Tunnel'; Script = 'run.ps1'; Extra = ' -WithTunnel' },
-    @{ Name = 'Epic Agent Local Only'; Script = 'run.ps1'; Extra = '' },
-    @{ Name = 'Epic API Tester'; Script = 'testing.ps1'; Extra = '' }
+    @{ Name = 'Epic Live Demo'; Script = 'live.ps1'; Extra = '' }
 )) {
     $link = $shell.CreateShortcut("$env:PUBLIC\Desktop\$($shortcut.Name).lnk")
     $link.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -106,17 +104,28 @@ foreach ($shortcut in @(
     $link.WorkingDirectory = $service
     $link.Save()
 }
-$link = $shell.CreateShortcut("$env:PUBLIC\Desktop\Configure Epic Agent.lnk")
+# Operator-only items live under $root, not on the demo desktop.
+$link = $shell.CreateShortcut("$root\Configure Epic Agent.lnk")
 $link.TargetPath = "$env:SystemRoot\System32\notepad.exe"
 $link.Arguments = "`"$envFile`""
 $link.Save()
 @'
 USE EpicDemo;
-SELECT p.PatientId, p.DisplayName, o.LoincCode, o.Description, o.NumericValue, o.Unit, o.RecordedAt
-FROM dbo.Patients AS p
-JOIN dbo.Observations AS o ON o.PatientId = p.PatientId
-ORDER BY o.ObservationId;
-'@ | Set-Content -LiteralPath "$env:PUBLIC\Desktop\Synthetic SQL Demo.sql" -Encoding UTF8
+SELECT
+    p.IdPaziente,
+    p.NomeCompleto,
+    p.DataNascita,
+    p.Sesso,
+    r.CodiceLOINC,
+    r.Descrizione,
+    r.ValoreNumerico,
+    r.UnitaMisura,
+    r.DataRilevazione
+FROM dbo.Pazienti AS p
+JOIN dbo.RisultatiLaboratorio AS r ON r.IdPaziente = p.IdPaziente
+WHERE p.IdPaziente = N'DEMO-100042'
+ORDER BY r.IdRisultato;
+'@ | Set-Content -LiteralPath "$root\Italian Patient Demo.sql" -Encoding UTF8
 @'
 EPIC / SQL DEMO - SYNTHETIC DATA ONLY
 
@@ -138,7 +147,7 @@ EPIC / SQL DEMO - SYNTHETIC DATA ONLY
 Keep the RDP desktop session open for interactive demonstration.
 Do not publish RDP3389, SQL1433 or browser CDP9222 through devtunnel.
 SQL Server Developer is for development/testing, not production workloads.
-'@ | Set-Content -LiteralPath "$env:PUBLIC\Desktop\READ ME FIRST.txt" -Encoding UTF8
+'@ | Set-Content -LiteralPath "$root\READ ME FIRST.txt" -Encoding UTF8
 
 $env:EPIC_BACKEND = 'fixture'
 $env:API_BEARER_TOKEN = (

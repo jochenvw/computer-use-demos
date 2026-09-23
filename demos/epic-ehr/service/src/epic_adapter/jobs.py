@@ -21,9 +21,16 @@ from .models import (
     RetrievalRequest,
     RetrievalSource,
 )
-from .progress import emit
+from .progress import begin, emit, end, story
 
 logger = logging.getLogger(__name__)
+
+SCENARIO_LABELS = {
+    RetrievalSource.ehr: "Patient portal (browser)",
+    RetrievalSource.files: "Clinical files on this workstation",
+    RetrievalSource.sql: "Italian oncology database (SSMS)",
+    RetrievalSource.both: "Patient portal + clinical files",
+}
 
 
 class ServiceDrainingError(RuntimeError):
@@ -40,6 +47,7 @@ class JobService:
         cache: RetrievalCache | None = None,
         backend_scope: str = "fixture",
         file_retriever: Callable[[str, list[ResourceType], FileCatalog], ClinicalBundle] | None = None,
+        database_retriever: Callable[[str, list[ResourceType]], ClinicalBundle] | None = None,
     ) -> None:
         self._adapter = adapter
         self._file_catalog = file_catalog
@@ -47,6 +55,7 @@ class JobService:
         self._cache = cache if cache is not None else RetrievalCache()
         self._backend_scope = backend_scope
         self._file_retriever = file_retriever
+        self._database_retriever = database_retriever
         self._jobs: dict[str, JobRecord] = {}
         self._gui_lock = threading.Lock()
         self._records_lock = threading.Lock()
@@ -137,11 +146,16 @@ class JobService:
         caller_id: str,
     ) -> None:
         job = self._jobs[job_id]
+        started = time.monotonic()
+        label = SCENARIO_LABELS.get(request.source, request.source.value)
         try:
             with self._gui_lock:
                 with self._idle:
                     job.status = JobStatus.running
+                begin(job.timeline, label, job_id)
                 emit(f"JOB {job_id[:8]}  running")
+                story("start", f"New request · {label} · patient {request.patient_id} · "
+                      f"asking for: {', '.join(r.value for r in request.resources)}")
                 key = self._cache.key(request, caller_id, self._backend_scope)
                 if request.bypass_cache:
                     self._cache.invalidate(key)
@@ -151,12 +165,27 @@ class JobService:
                     else CacheStatus.hit if entry else CacheStatus.miss
                 )
                 emit(f"CACHE    {job.cache_status.value}")
+                if entry is not None:
+                    story("info", "Reusing the result collected earlier (cache hit)")
+                else:
+                    story("info", "Starting the computer-use agent with the matching skill")
                 if entry is None:
                     resources = []
                     files = []
                     if request.source in {RetrievalSource.ehr, RetrievalSource.both}:
                         emit("EHR      retrieving requested chart resources")
                         resources = self._adapter.retrieve(request.patient_id, request.resources)
+                    if request.source == RetrievalSource.sql:
+                        if self._database_retriever is None:
+                            raise RuntimeError("SQL computer-use retrieval is not configured.")
+                        emit("SQL      navigating the approved local SSMS workspace")
+                        database = self._database_retriever(
+                            request.patient_id, request.resources,
+                        )
+                        if database.patient_id != request.patient_id:
+                            raise ValueError("SQL retrieval patient mismatch.")
+                        resources.extend(database.resources)
+                        files.extend(database.files)
                     if request.source in {RetrievalSource.files, RetrievalSource.both}:
                         if self._file_retriever is not None:
                             local = self._file_retriever(
@@ -195,10 +224,29 @@ class JobService:
                     job.status = JobStatus.complete
                     self._idle.notify_all()
                 emit(f"JOB {job_id[:8]}  complete / {len(bundle.resources)} resource(s), {len(bundle.files)} file(s)")
+                story("done", f"Done in {time.monotonic() - started:.0f} s · "
+                      f"{len(bundle.resources)} clinical item(s) ready as FHIR, OMOP "
+                      "or any schema you provide")
+                end()
         except Exception as exc:
             job.error = "Retrieval failed. Contact the service operator with the job ID."
+            reason = str(exc)
+            if reason.startswith("Skill stopped without verified data: "):
+                # Fixed enum values only; safe to show the caller.
+                job.error = reason
+                if reason.endswith("session_expired."):
+                    job.error += " Log in to Mijn Dossier in the VM's Edge window, then retry."
+                elif reason.endswith("rdp_minimized."):
+                    job.error += (
+                        " The VM screen is not rendering: restore or reconnect the RDP"
+                        " window (or run infra\\keep-session-alive.ps1), then retry."
+                    )
+            elif isinstance(exc, TimeoutError):
+                job.error = "Retrieval timed out; see operator diagnostics."
             # Exception messages/tracebacks can contain patient data or model responses.
             logger.error("Retrieval job %s failed (%s)", job_id, type(exc).__name__)
+            story("error", f"Stopped after {time.monotonic() - started:.0f} s · {job.error}")
+            end()
             try:
                 self._audit.write(
                     event="retrieval-finished", caller_id=caller_id,
