@@ -1,22 +1,99 @@
-# Epic Retrieval Agent
+# Clinical Data Agent – computer use for healthcare
 
-A red-cross terminal agent exposing a clinical-data retrieval API. Callers
-request files, EHR data, or both; browser actions stay behind the API boundary.
+An AI agent that **uses a hospital workstation the way a person does**: it looks
+at the screen, clicks, types, and reads. It then returns what it found as
+structured data in the format you choose.
 
-```text
-        ++++++++
-        ++++++++
-  ++++++++++++++++++++
-  ++++++++++++++++++++
-        ++++++++
-        ++++++++
+> Independent training demo with **synthetic patients only**. Not an Epic Systems
+> product, not a medical device, and not for clinical decisions.
 
-  EPIC RETRIEVAL AGENT
-  Local files / browser worker / clinical data API
-```
+## For clinicians: what this shows
 
-The cross is rendered red in the terminal. This is an independent training demo,
-not an Epic Systems or humanitarian organization product.
+### The problem
+
+Clinical data is spread across systems that were never designed to share it:
+- **EHR portals:** Epic or other electronic health record (EHR) portals, used through a browser.
+- **Files:** ECG printouts and scanned reports saved in folders.
+- **Local databases:** accessed with desktop tools, in the local language.
+
+Integration projects (APIs, HL7 interfaces) take months per system. Meanwhile,
+staff re-type values between screens.
+
+### The idea
+
+Give an AI agent the same screen, mouse, and keyboard a staff member has. You ask
+for data ("labs for patient X"). The agent opens the right application, finds the
+data, reads it, and hands it over in a standard format:
+- **FHIR:** Fast Healthcare Interoperability Resources, the HL7 exchange standard.
+- **OMOP:** the Observational Medical Outcomes Partnership common data model, used for research.
+- **Your own schema or ontology,** in any language.
+
+No integration project and no change to the source system.
+
+### The three scenarios
+
+| # | Source | What the agent does | Returns | Time |
+|---|---|---|---|---|
+| 1 | **Patient portal** (Epic MyChart / Mijn Dossier, browser) | Opens the logged-in portal, goes to *Uitslagen* (results), reads the latest lab results | Lab observations with values, units, dates | ~1 min (portal-dependent) |
+| 2 | **ECG printout** (image file on the desktop) | Opens the `assets` folder, opens `ecg.jpg`, reads what is **printed** on it | ECG report + one observation per printed value: rate, PR, QRS, QT, QTc, axes, printed statements | ~30–60 s |
+| 3 | **Italian oncology database** (SQL Server Management Studio) | Writes and runs read-only queries on an Italian-language schema (`paziente`, `esame_laboratorio`) | Patient + recent labs (e.g., *Emoglobina*, *Creatinina*, CEA), translated into FHIR/OMOP | ~1 min |
+
+You can switch the output after the run: **FHIR**, **OMOP**, JSON, HL7 v2, or a
+**custom schema**. A Dutch example is prefilled. The results are mapped again
+without repeating the computer work.
+
+### What you see during the demo
+
+1. **The workstation (remote desktop).** Windows open and the mouse moves; in the
+   browser, red rings mark each click. SQL is typed into SSMS. Afterwards the
+   agent closes everything it opened.
+2. **The agent console** (black window with the hospital banner). It gives a
+   plain-language running commentary:
+   - `[REQUEST]`: what was asked.
+   - `[STEP]`: what it is doing on screen.
+   - `[SQL]`: the exact query it ran.
+   - `[THINKING]`: a short summary of the model's reasoning.
+   - `[RESULT]`: each value it extracted.
+   - `[DONE]`: total time.
+3. **The test page** (browser). Scenario buttons, a live timeline with a spinner,
+   a *What was found* summary in readable form, and the formatted output.
+
+### Safety boundaries built in
+
+- **Reads, does not interpret.** For the ECG, the agent copies only what is
+  printed or plainly visible (for example "Printed on ECG: Rate 63; PR 176 …").
+  It adds no diagnosis of its own. ECG items are marked *preliminary:
+  transcribed by AI, verify against source*.
+- **Verified or nothing.** Every value must come from a screen or file the agent
+  actually opened. It checks the patient identity, and it stops with a clear
+  reason (such as "portal session expired – log in again") rather than guess.
+- **Narrow permissions.**
+  - Each scenario gets only its own tools.
+  - SQL must be read-only (`SELECT`) and limited to the demo database.
+  - The browser stays on one approved site and may type only the requested
+    patient ID.
+- **Read-only accounts still required.** The instructions to the AI are not a
+  security control. The source system's account must itself be read-only.
+- **Synthetic data only.** The model runs in Azure AI Foundry (GlobalStandard
+  deployment). Processing location is not guaranteed to stay in one country.
+  Real patient data would need approved hosting, identity, and a data
+  processing agreement.
+
+### Honest limitations
+
+- **Speed:** a model looking at screens takes 30–70 s per request. Code written
+  for one system would be faster, but the agent adapts to a German or Italian
+  system without new code.
+- **Accuracy:** screen and image reading can err. The output is a draft for
+  human verification, not a final record.
+- **Throughput:** one request at a time on one workstation. This is a
+  demonstration, not a production interface engine.
+
+---
+
+## For operators: technical reference
+
+The sections below cover setup, running, and the API.
 
 ## Start the terminal and API
 
@@ -35,9 +112,9 @@ environment. Do not use the example placeholder. Then:
 .\run.ps1 -BannerOnly
 ```
 
-The API listens on `127.0.0.1:8000`. The console shows queued/running/completed
-jobs, file counts, and browser action names, but no patient identifiers, model
-reasoning, clinical text, or screenshots. Stop with Ctrl+C.
+The API listens on `127.0.0.1:8000`. The console shows a plain-language
+timeline per job: steps, SQL queries, reasoning summaries, and extracted values.
+Because it shows clinical values, use synthetic data only. Stop with Ctrl+C.
 
 Default `EPIC_BACKEND=fixture` runs against synthetic data with no browser/model
 calls. The in-memory demo job store supports one process, at most eight pending
@@ -83,7 +160,8 @@ DICOM/SCP-ECG remain original downloads. No waveform conversion or diagnosis.
 ## Copilot CLI skills mode
 
 The Python agent hosts **GitHub Copilot CLI through `github-copilot-sdk==1.0.13`**.
-Two packaged `SKILL.md` modules implement `epic-browser` and `local-files`.
+Three packaged `SKILL.md` modules implement `epic-browser`, `local-files`, and
+`sql-desktop`.
 Each request gets an isolated empty-mode CLI session with only the selected
 skill eagerly loaded and that skill's host tools. Generic shell, filesystem,
 network, built-in skills, plugins, and configuration discovery are not enabled.
