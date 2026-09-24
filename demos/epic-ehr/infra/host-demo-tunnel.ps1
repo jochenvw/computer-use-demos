@@ -34,22 +34,20 @@ if (-not (Test-Path -LiteralPath $tokenPath)) {
 }
 
 @'
-$ErrorActionPreference = 'Stop'
-$deadline = [DateTime]::UtcNow.AddMinutes(30)
-do {
+# Runs forever: waits for the API (it only starts after the demo user logs on)
+# and re-hosts the tunnel whenever devtunnel exits.
+$ErrorActionPreference = 'Continue'
+while ($true) {
     try {
         $health = Invoke-RestMethod 'http://127.0.0.1:__PORT__/healthz' -TimeoutSec 2
-        if ($health.status -eq 'ok') { break }
-    } catch { }
-    Start-Sleep -Seconds 2
-} while ([DateTime]::UtcNow -lt $deadline)
-if ($health.status -ne 'ok') {
-    throw 'The local Epic API did not become healthy within 30 minutes.'
-}
-$token = Get-Content -LiteralPath 'C:\EpicDemo\remote\host-token.txt' -Raw
-& 'C:\DemoTools\devtunnel\devtunnel.exe' host '__TUNNEL_ID__' --access-token $token
-if ($LASTEXITCODE -ne 0) {
-    throw 'The stable demo tunnel exited with an error.'
+    } catch { $health = $null }
+    if ($health.status -eq 'ok') {
+        $token = Get-Content -LiteralPath 'C:\EpicDemo\remote\host-token.txt' -Raw
+        & 'C:\DemoTools\devtunnel\devtunnel.exe' host '__TUNNEL_ID__' --access-token $token
+        Start-Sleep -Seconds 10
+    } else {
+        Start-Sleep -Seconds 5
+    }
 }
 '@.Replace('__TUNNEL_ID__', $TunnelId).Replace('__PORT__', "$Port") |
     Set-Content -LiteralPath $runner -Encoding UTF8
