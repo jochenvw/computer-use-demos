@@ -1,72 +1,168 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clinical Computer-Use Agent</title>
-<script>(() => { const param = new URLSearchParams(window.location.search).get('scoutTheme'); const theme = param || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.setAttribute('data-theme', theme); })();</script>
+<script>
+  (() => {
+    const param = new URLSearchParams(window.location.search).get("scoutTheme");
+    const theme =
+      param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
 <style>
-:root{--bg:#f4f7fb;--card:#fff;--ink:#14213d;--muted:#5b6b82;--line:#dde4ee;--accent:#0f6fde;--accent2:#0a9396;--red:#d62839;--ok:#1b8a4b;--warn:#c46a00;--think:#7b3fb5;--shadow:0 6px 24px rgba(20,33,61,.08)}
-[data-theme=dark]{--bg:#0d1420;--card:#141e2e;--ink:#e7eef8;--muted:#98a8bf;--line:#26344a;--accent:#4c9bff;--accent2:#35c3c6;--red:#ff5a6a;--ok:#4cc27d;--warn:#ffae42;--think:#c79bff;--shadow:0 6px 24px rgba(0,0,0,.35)}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
-header{background:linear-gradient(120deg,#0b3d91,#0a9396);color:#fff;padding:22px 32px;display:flex;align-items:center;gap:18px}
-.cross{width:46px;height:46px;position:relative;flex:none;background:#fff;border-radius:12px}
-.cross:before,.cross:after{content:"";position:absolute;background:var(--red);border-radius:2px}.cross:before{left:18px;top:8px;width:10px;height:30px}.cross:after{left:8px;top:18px;width:30px;height:10px}
-header h1{margin:0;font-size:24px;font-weight:650}header p{margin:2px 0 0;opacity:.9;font-size:14px}
-main{max-width:1180px;margin:0 auto;padding:24px 24px 60px;display:grid;gap:20px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px}
-h2{margin:0 0 12px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:650}
-.scenarios{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.scenario{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:18px;border:2px solid var(--line);border-radius:14px;background:var(--card);transition:.15s}
-.scenario:hover:not(:disabled){border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}.scenario:disabled{opacity:.45;cursor:not-allowed}
-.scenario.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--card))}
-.scenario .icon{font-size:30px}.scenario b{font-size:17px}.scenario span{color:var(--muted);font-size:13.5px}.scenario em{font-style:normal;font-size:12px;color:var(--accent2);font-weight:600}
-.instruction{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}.instruction summary{font-size:15px;color:var(--ink)}
-.instruction p{margin:8px 0;color:var(--muted);font-size:13px}.instruction code{color:var(--accent2)}
-.proof{display:inline-block;margin-left:8px;padding:2px 7px;border:1px solid var(--line);border-radius:99px;color:var(--ok);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}label{display:block;font-size:13px;color:var(--muted);font-weight:600}[hidden]{display:none!important}
-select,input,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:4px}
-textarea{width:100%;font:12.5px/1.45 Consolas,monospace}
-button{font:inherit;font-weight:600;border:0;border-radius:9px;padding:9px 16px;background:var(--accent);color:#fff;cursor:pointer}
-button.secondary{background:transparent;color:var(--accent);border:1px solid var(--line)}button:disabled{opacity:.5;cursor:not-allowed}
-.status{display:flex;align-items:center;gap:14px;margin-bottom:6px}
-#state{font-size:16px}#state.ok{color:var(--ink)}#state.bad{color:var(--red)}
-#elapsed{margin-left:auto;font:600 22px Consolas,monospace;color:var(--muted)}
-.spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite;display:none}
-.busy .spinner{display:block}@keyframes spin{to{transform:rotate(360deg)}}
-.pulse{display:none;height:4px;border-radius:4px;background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:40% 100%;background-repeat:no-repeat;animation:slide 1.4s ease-in-out infinite;margin:6px 0 12px}
-.busy .pulse{display:block}@keyframes slide{from{background-position:-40% 0}to{background-position:140% 0}}
-.cols{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
-#timeline{list-style:none;margin:0;padding:0;max-height:460px;overflow:auto}
-#timeline li{display:grid;grid-template-columns:44px 26px 1fr;gap:8px;padding:7px 4px;border-bottom:1px dashed var(--line);animation:fade .3s}
-#timeline li time{color:var(--muted);font:12px Consolas,monospace;padding-top:2px}
-#timeline li.thinking .txt{color:var(--think);font-style:italic}#timeline li.query .txt{font:12.5px/1.45 Consolas,monospace}
-#timeline li.result .txt{color:var(--ok)}#timeline li.done .txt{color:var(--ok);font-weight:700}#timeline li.warn .txt{color:var(--warn)}#timeline li.error .txt{color:var(--red);font-weight:600}
-#timeline li.start .txt{font-weight:650}@keyframes fade{from{opacity:0;transform:translateY(4px)}}
-.empty{color:var(--muted);font-style:italic}
-#summary{list-style:none;margin:0;padding:0}#summary li{padding:8px 10px;border-left:4px solid var(--ok);background:color-mix(in srgb,var(--ok) 7%,var(--card));border-radius:6px;margin-bottom:8px}
-pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;max-height:520px;overflow:auto;font:12px/1.45 Consolas,monospace;white-space:pre-wrap;word-break:break-word}
-details summary{cursor:pointer;color:var(--muted);font-weight:600}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0}
-.grid input,.grid select{width:100%}#files a{display:inline-block;margin:6px 10px 0 0;color:var(--accent)}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-bottom:8px}
-@media(max-width:900px){.scenarios,.cols{grid-template-columns:1fr}}
+:root {
+  color-scheme: light;
+  --cp-bg: #f7f4ef;
+  --cp-bg-elevated: #fcfbf8;
+  --cp-surface: #ffffff;
+  --cp-surface-soft: #f5f5f5;
+  --cp-border: #dedede;
+  --cp-border-strong: #919191;
+  --cp-text: #242424;
+  --cp-text-muted: #5c5c5c;
+  --cp-text-soft: #6f6f6f;
+  --cp-accent: #b11f4b;
+  --cp-accent-hover: #9a1a41;
+  --cp-accent-soft: rgba(177, 31, 75, 0.08);
+  --cp-accent-fg: #ffffff;
+  --cp-success: #16a34a;
+  --cp-danger: #dc2626;
+  --cp-warning: #f59e0b;
+  --cp-link: #0078d4;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --cp-overlay: rgba(255, 255, 255, 0.8);
+  --cp-panel: rgba(255, 255, 255, 0.86);
+  --cp-panel-strong: rgba(255, 255, 255, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.55);
+  --cp-highlight: rgba(177, 31, 75, 0.12);
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --cp-bg: #3d3b3a;
+  --cp-bg-elevated: #343231;
+  --cp-surface: #292929;
+  --cp-surface-soft: #2e2e2e;
+  --cp-border: #474747;
+  --cp-border-strong: #5f5f5f;
+  --cp-text: #dedede;
+  --cp-text-muted: #919191;
+  --cp-text-soft: #b0b0b0;
+  --cp-accent: #fd8ea1;
+  --cp-accent-hover: #fb7b91;
+  --cp-accent-soft: rgba(253, 142, 161, 0.14);
+  --cp-accent-fg: #1a1a1a;
+  --cp-success: #4ade80;
+  --cp-danger: #f87171;
+  --cp-warning: #fbbf24;
+  --cp-link: #4da6ff;
+  --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --cp-overlay: rgba(41, 41, 41, 0.88);
+  --cp-panel: rgba(41, 41, 41, 0.72);
+  --cp-panel-strong: rgba(41, 41, 41, 0.96);
+  --cp-sheen: rgba(255, 255, 255, 0.04);
+  --cp-highlight: rgba(253, 142, 161, 0.12);
+}
+:root{--cp-bg:#eef2f5;--cp-bg-elevated:#f8fafb;--cp-surface-soft:#f3f6f8;--cp-border:#d8dfe5;--cp-chrome:#10304d;--cp-chrome-fg:#eaf2f8;--cp-chrome-muted:#a9c0d4;--cp-banner:#e2ebf2;--cp-think:var(--cp-accent)}
+html[data-theme=dark]{--cp-bg:#2b3238;--cp-bg-elevated:#242a30;--cp-surface:#1f2429;--cp-surface-soft:#262c32;--cp-border:#3f4953;--cp-chrome:#0b1a29;--cp-chrome-fg:#dbe7f1;--cp-chrome-muted:#8ea6ba;--cp-banner:#1a2733}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--cp-bg);color:var(--cp-text);font:14px/1.65 "Segoe UI",Aptos,Calibri,-apple-system,BlinkMacSystemFont,sans-serif}
+button,input,select,textarea{font:inherit}
+a{color:var(--cp-link);text-underline-offset:4px}
+button,a,input,select,textarea,summary{outline-offset:4px}
+:focus-visible{outline:2px solid var(--cp-accent)}
+[hidden]{display:none!important}
+.skip{position:fixed;left:12px;top:12px;z-index:50;transform:translateY(-160%);padding:10px 14px;border-radius:8px;background:var(--cp-surface);color:var(--cp-text);border:1px solid var(--cp-accent)}
+.skip:focus{transform:none}
+.safety{min-height:28px;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 12px;background:var(--cp-text);color:var(--cp-bg);font:10px/1.4 Consolas,"Courier New",Courier,monospace;letter-spacing:.14em}
+.app-header{min-height:58px;background:var(--cp-chrome);color:var(--cp-chrome-fg);border-bottom:1px solid var(--cp-chrome);padding:8px 24px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}.brand-mark{width:38px;height:38px;display:grid;place-items:center;flex:none;border-radius:6px;background:var(--cp-chrome-fg);color:var(--cp-chrome);font-size:25px;font-weight:900}
+.brand strong{display:block;font-size:14px;letter-spacing:.14em}.brand small{display:block;margin-top:2px;color:var(--cp-chrome-muted);font-size:10px;letter-spacing:.05em}
+.header-meta{display:flex;align-items:center;gap:24px;color:var(--cp-chrome-muted);font-size:11px}.header-meta strong{color:var(--cp-chrome-fg);font-weight:600}.connection{display:inline-flex;align-items:center;gap:7px}.connection:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--cp-success)}
+.context-banner{min-height:68px;display:flex;align-items:center;gap:28px;padding:10px 24px;border-bottom:1px solid var(--cp-border);background:var(--cp-banner)}
+.context-identity{display:flex;align-items:center;gap:12px;min-width:230px}.context-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:var(--cp-chrome);color:var(--cp-chrome-fg);font-weight:700}
+.context-identity strong{display:block;font-size:16px}.context-identity small{display:block;color:var(--cp-text-muted);font-size:11px}
+.context-facts{display:flex;align-items:center;gap:28px;flex:1}.fact{min-width:0}.fact span{display:block;font:600 9px/1.4 Consolas,"Courier New",Courier,monospace;letter-spacing:.14em;color:var(--cp-text-soft)}.fact strong{display:block;margin-top:2px;font-size:12px}
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100dvh - 154px)}
+.sidebar{position:sticky;top:0;align-self:start;max-height:100dvh;overflow:auto;display:flex;flex-direction:column;gap:20px;padding:20px 16px;border-right:1px solid var(--cp-border);background:var(--cp-bg-elevated)}
+.eyebrow{margin:0;font:10px/1.6 Consolas,"Courier New",Courier,monospace;letter-spacing:.14em;color:var(--cp-text-soft)}
+.sidebar nav{display:grid;gap:4px}.nav-item{display:block;padding:10px 12px;border-radius:8px;color:var(--cp-text);text-decoration:none;border:1px solid transparent}.nav-item:hover{background:var(--cp-surface-soft);border-color:var(--cp-border)}.nav-item.active{background:var(--cp-accent-soft);border-color:var(--cp-highlight);box-shadow:inset 3px 0 var(--cp-accent)}.nav-item strong{display:block;font-size:12px}.nav-item small{display:block;margin-top:2px;color:var(--cp-text-muted);font-size:10px}
+.sidebar-note{margin-top:auto;padding-top:32px;color:var(--cp-text-muted);font-size:11px;line-height:1.7}.sidebar-note strong{display:block;color:var(--cp-text);font-size:12px}.sidebar-note .version{display:block;margin-top:16px;font:10px Consolas,"Courier New",Courier,monospace;letter-spacing:.08em}
+main{width:100%;max-width:1600px;min-width:0;margin:0 auto;padding:0 32px 64px}
+.page-toolbar{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:var(--cp-text-soft);font-size:11px}.breadcrumb{display:flex;align-items:center;gap:8px}.breadcrumb strong{color:var(--cp-text-muted)}.toolbar-status{display:flex;align-items:center;gap:8px}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--cp-border);border-radius:7px;background:var(--cp-surface-soft);padding:3px 8px;color:var(--cp-text-muted);font-size:10px;font-weight:650}.badge.accent{border-color:var(--cp-highlight);background:var(--cp-accent-soft);color:var(--cp-accent)}.badge.success{border-color:var(--cp-success);background:var(--cp-surface);color:var(--cp-text)}.badge.success:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cp-success)}
+.attention{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:12px 16px;border:1px solid var(--cp-border);border-left:4px solid var(--cp-accent);border-radius:12px;background:var(--cp-surface)}.attention p{margin:0;color:var(--cp-text-muted);font-size:12px}.attention strong{color:var(--cp-text)}
+.card{margin-bottom:20px;overflow:hidden;border:1px solid var(--cp-border);border-radius:16px;background:var(--cp-surface)}
+.panel{padding:20px 24px}.section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.section-heading h1,.section-heading h2{margin:2px 0 0;color:var(--cp-text);font-size:20px;line-height:1.25;font-weight:650;letter-spacing:-.01em}.section-heading p:not(.eyebrow){margin:7px 0 0;color:var(--cp-text-muted)}
+.scenarios{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--cp-border)}
+.scenario{appearance:none;cursor:pointer;min-width:0;min-height:184px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:20px;border:0;border-right:1px solid var(--cp-border);border-radius:0;background:var(--cp-surface);color:var(--cp-text);text-align:left;transition:background .15s,border-color .15s}.scenario:last-child{border-right:0}.scenario:hover:not(:disabled){background:var(--cp-surface-soft)}.scenario:disabled{opacity:.5;cursor:not-allowed}.scenario.active{background:var(--cp-accent-soft);box-shadow:inset 0 4px var(--cp-accent)}
+.scenario .icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--cp-border);border-radius:8px;color:var(--cp-accent);background:var(--cp-bg-elevated)}.scenario .icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7}.scenario b{font-size:16px}.scenario span:not(.icon){color:var(--cp-text-muted);font-size:12px;line-height:1.7}.scenario em{margin-top:auto;font:10px Consolas,"Courier New",Courier,monospace;font-style:normal;letter-spacing:.08em;color:var(--cp-text-soft)}
+.instruction{padding:0 24px 20px}.instruction details{border-top:1px solid var(--cp-border);padding-top:16px}.instruction summary{cursor:pointer;color:var(--cp-text);font-size:13px}.instruction p{margin:10px 0;color:var(--cp-text-muted);font-size:12px}.instruction code{color:var(--cp-accent)}.proof{display:inline-block;margin-left:8px;padding:2px 7px;border:1px solid var(--cp-success);border-radius:7px;color:var(--cp-text);font-size:9px;font-weight:700;letter-spacing:.08em}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}label{display:block;color:var(--cp-text-muted);font-size:12px;font-weight:600}
+select,input,textarea{max-width:100%;margin-top:5px;padding:9px 11px;border:1px solid var(--cp-border);border-radius:12px;background:var(--cp-surface);color:var(--cp-text)}
+textarea{width:100%;min-height:96px;resize:vertical;font:12px/1.55 Consolas,"Courier New",Courier,monospace}
+button{cursor:pointer;min-height:40px;padding:9px 16px;border:1px solid var(--cp-accent);border-radius:12px;background:var(--cp-accent);color:var(--cp-accent-fg);font-weight:650}button:hover:not(:disabled){background:var(--cp-accent-hover)}button.secondary{border-color:var(--cp-border);background:var(--cp-surface);color:var(--cp-text)}button.secondary:hover:not(:disabled){background:var(--cp-surface-soft)}button:disabled{opacity:.5;cursor:not-allowed}
+.status{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--cp-border);background:var(--cp-bg-elevated)}#state{font-size:13px}#state.ok{color:var(--cp-text)}#state.bad{color:var(--cp-danger)}#elapsed{margin-left:auto;font:600 16px Consolas,"Courier New",Courier,monospace;color:var(--cp-text-muted)}
+.spinner{width:18px;height:18px;border-radius:50%;border:2px solid var(--cp-border);border-top-color:var(--cp-accent);animation:spin .8s linear infinite;display:none}.busy .spinner{display:block}@keyframes spin{to{transform:rotate(360deg)}}
+.pulse{display:none;height:3px;background:var(--cp-accent);animation:pulse 1.2s ease-in-out infinite}.busy .pulse{display:block}@keyframes pulse{50%{opacity:.35}}
+.cols{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.8fr)}.work-panel{min-width:0;padding:20px 24px}.work-panel+ .work-panel{border-left:1px solid var(--cp-border)}
+.work-panel h2,.output-heading{margin:0 0 14px;font-size:16px;font-weight:650}.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;color:var(--cp-text-soft);font-size:10px}
+#timeline{list-style:none;margin:0;padding:0;max-height:460px;overflow:auto}#timeline li{display:grid;grid-template-columns:42px 22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--cp-border);animation:arrival .5s ease-out}#timeline li time{padding-top:2px;color:var(--cp-text-soft);font:10px Consolas,"Courier New",Courier,monospace}#timeline li.thinking .txt{color:var(--cp-think);font-style:italic}#timeline li.query .txt{font:12px/1.55 Consolas,"Courier New",Courier,monospace}#timeline li.result .txt,#timeline li.done .txt{color:var(--cp-success)}#timeline li.done .txt{font-weight:700}#timeline li.warn .txt{color:var(--cp-warning)}#timeline li.error .txt{color:var(--cp-danger);font-weight:600}#timeline li.start .txt{font-weight:650}
+.empty{color:var(--cp-text-muted);font-style:italic}#summary{list-style:none;margin:0;padding:0}#summary li{margin-bottom:8px;padding:10px 12px;border-left:4px solid var(--cp-success);background:var(--cp-bg-elevated);border-radius:0 8px 8px 0}
+pre{max-height:520px;overflow:auto;margin:0;padding:14px;border:1px solid var(--cp-border);border-radius:10px;background:var(--cp-bg-elevated);font:12px/1.55 Consolas,"Courier New",Courier,monospace;white-space:pre-wrap;word-break:break-word}
+details summary{cursor:pointer;color:var(--cp-text-muted);font-weight:600}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0}.grid input,.grid select{width:100%}#files a{display:inline-block;margin:8px 12px 0 0;color:var(--cp-link)}
+.advanced{padding:20px 24px}.advanced>details>summary{font-size:13px}.advanced>details[open]>summary{margin-bottom:16px}.form-footer{display:flex;justify-content:space-between;gap:12px;align-items:center;border-top:1px solid var(--cp-border);padding-top:16px}
+@keyframes arrival{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(max-width:1000px){.shell{grid-template-columns:1fr}.sidebar{display:none}.context-facts{gap:16px}.scenarios,.cols{grid-template-columns:1fr}.scenario{min-height:0;border-right:0;border-bottom:1px solid var(--cp-border)}.scenario:last-child{border-bottom:0}.work-panel+.work-panel{border-left:0;border-top:1px solid var(--cp-border)}main{padding-inline:20px}}
+@media(max-width:700px){.app-header{padding:10px 14px}.header-meta .workstation{display:none}.context-banner{align-items:flex-start;gap:12px;padding:12px 14px}.context-facts{display:none}main{padding-inline:12px}.page-toolbar{align-items:flex-start}.toolbar-status{display:none}.panel,.work-panel,.advanced{padding:16px}.section-heading{display:block}.proof{display:block;width:max-content;margin:6px 0 0}.status{flex-wrap:wrap}#elapsed{order:3;width:100%;margin:0}.form-footer{align-items:stretch;flex-direction:column}}
 </style></head><body>
-<header><div class="cross"></div><div><h1>Clinical data from any system</h1><p>A GitHub Copilot agent operates the same screens a clinician uses &#x2013; portal, files, database &#x2013; and returns standard FHIR, OMOP or your own schema.</p></div></header>
-<main>
-<section class="card"><h2>1 &#xB7; Choose a scenario</h2><div class="scenarios">
-<button id="browserScenario" class="scenario"><div class="icon">&#x1F310;</div><b>Patient portal</b><span>Navigates the logged-in Epic MyChart portal like a person would: opens <i>Uitslagen</i> and reads the lab results.</span><em>Browser &#xB7; ~1 min</em></button>
-<button id="fileScenario" class="scenario"><div class="icon">&#x1FAC0;</div><b>ECG on the desktop</b><span>Finds the ECG image in the local <i>assets</i> folder and transcribes the printed measurements with vision.</span><em>Files &amp; scans &#xB7; ~30 s</em></button>
-<button id="sqlScenario" class="scenario"><div class="icon">&#x1F5C4;&#xFE0F;</div><b>Italian oncology database</b><span>Opens SQL Server Management Studio, explores an Italian schema and writes its own queries.</span><em>Any database &#xB7; ~1 min</em></button>
-</div><div class="instruction"><details id="skillPanel" open><summary><b>Instruction sent to the agent: <code id="skillName">choose a scenario</code></b><span class="proof">plain text, not automation code</span></summary>
+<a class="skip" href="#main">Skip to main content</a>
+<div class="safety"><span aria-hidden="true">+</span><span>DEMONSTRATION SYSTEM &#xB7; SYNTHETIC OR AUTHORIZED READ-ONLY DATA ONLY</span></div>
+<header class="app-header">
+<div class="brand"><span class="brand-mark" aria-hidden="true">+</span><span><strong>CLINICAL DATA / AGENT</strong><small>Computer-use retrieval workstation &#xB7; GitHub Copilot</small></span></div>
+<div class="header-meta"><span class="workstation"><strong>Demo operator</strong> &#xB7; Epic workstation</span><span class="connection" role="status">Protected connection</span></div>
+</header>
+<section class="context-banner" aria-label="Current demonstration context">
+<div class="context-identity"><span class="context-icon" aria-hidden="true">CU</span><span><strong id="contextScenario">Computer-use demonstration</strong><small>Human-reviewed clinical retrieval</small></span></div>
+<div class="context-facts">
+<div class="fact"><span>INTERFACES</span><strong>Portal &#xB7; files &#xB7; SQL</strong></div>
+<div class="fact"><span>OUTPUTS</span><strong>FHIR &#xB7; OMOP &#xB7; custom</strong></div>
+<div class="fact"><span>CONTROL</span><strong>Read-only, inspectable steps</strong></div>
+<div class="fact"><span>MODEL</span><strong>Scoped agent session</strong></div>
+</div>
+<a href="#advanced">Open complete request controls</a>
+</section>
+<div class="shell">
+<aside class="sidebar" aria-label="Demo workspace navigation">
+<div><p class="eyebrow">DEMO WORKSPACES</p></div>
+<nav>
+<a class="nav-item active" href="#scenarios"><strong>Choose retrieval</strong><small>Portal, files or database</small></a>
+<a class="nav-item" href="#live"><strong>Agent activity</strong><small>Current work and findings</small></a>
+<a class="nav-item" href="#structured"><strong>Structured result</strong><small>FHIR, OMOP or custom</small></a>
+<a class="nav-item" href="#advanced"><strong>Advanced request</strong><small>Connection and payload details</small></a>
+</nav>
+<div class="sidebar-note"><strong>Human review required</strong><p>The agent retrieves and structures information. Every action, result and source remains visible; clinical interpretation stays with the authorized reviewer.</p><span class="version">CLINICAL AGENT / 0.3</span></div>
+</aside>
+<main id="main" tabindex="-1">
+<div class="page-toolbar"><div class="breadcrumb"><span>Clinical systems</span><span>/</span><span>Computer use</span><span>/</span><strong>Retrieval workspace</strong></div><div class="toolbar-status"><span class="badge accent">Live demonstration</span><span class="badge success">Service connected</span></div></div>
+<div class="attention"><span class="badge accent">Current task</span><p><strong>Select one retrieval route.</strong> The exact instruction, agent activity and structured result remain inspectable below.</p></div>
+<section class="card" id="scenarios"><div class="panel"><div class="section-heading"><div><p class="eyebrow">RETRIEVAL ROUTE</p><h1>Choose the system to inspect</h1><p>Each route uses the same guarded output contract with a workspace-specific instruction.</p></div><span class="badge">3 available</span></div></div><div class="scenarios">
+<button id="browserScenario" class="scenario"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span><b>Patient portal</b><span>Navigates the logged-in Epic MyChart portal like a person would: opens <i>Uitslagen</i> and reads the lab results.</span><em>BROWSER &#xB7; ABOUT 1 MINUTE</em></button>
+<button id="fileScenario" class="scenario"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM7 12h2l1.5-4 3 8 1.5-4H18"/></svg></span><b>ECG on the desktop</b><span>Finds the ECG image in the local <i>assets</i> folder and transcribes the printed measurements with vision.</span><em>FILES AND SCANS &#xB7; ABOUT 30 SECONDS</em></button>
+<button id="sqlScenario" class="scenario"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span><b>Italian oncology database</b><span>Opens SQL Server Management Studio, explores an Italian schema and writes its own queries.</span><em>DATABASE &#xB7; ABOUT 1 MINUTE</em></button>
+</div><div class="instruction"><details id="skillPanel" open><summary><b>Instruction sent to the agent: <code id="skillName">choose a scenario</code></b><span class="proof">PLAIN TEXT &#xB7; INSPECTABLE</span></summary>
 <p>This is the exact packaged <code>SKILL.md</code> loaded into the isolated Copilot session. It defines the objective, safety boundaries and output contract; the model chooses each action from fresh screenshots.</p>
 <pre id="skillText">Choose Patient portal, ECG on the desktop or Italian oncology database to inspect the instruction.</pre></details></div></section>
-<section class="card"><h2>2 &#xB7; Output format</h2><div class="row">
+<section class="card"><div class="panel"><div class="section-heading"><div><p class="eyebrow">OUTPUT CONTRACT</p><h2>Select the structured representation</h2></div></div><div class="row">
 <label>Return the data as<select id="format"><option value="fhir">FHIR R4 JSON</option><option value="omop">OMOP CDM JSON</option><option value="json">Normalized JSON</option><option value="fhir-xml">FHIR XML</option><option value="hl7">HL7 v2</option><option value="ndjson">NDJSON</option><option value="custom">Custom schema / ontology&#x2026;</option></select></label>
 <button id="reformat" class="secondary">Show last result in this format</button></div>
 <label id="schemaBox" hidden style="margin-top:12px">Target schema / ontology &#x2013; any JSON schema, example or description<textarea id="schema" rows="6">{"patient":{"id":"string","naam":"string","geslacht":"man|vrouw","geboortedatum":"YYYY-MM-DD"},"labuitslagen":[{"test_nl":"Nederlandse testnaam","loinc":"LOINC-code of null","waarde":"getal","eenheid":"UCUM-eenheid","datum":"ISO 8601","afwijkend":"true|false"}],"ecg":{"conclusie_nl":"string"}}</textarea></label>
-</section>
+</div></section>
 <section class="card" id="live"><div class="status"><div class="spinner"></div><b id="state" class="ok">Idle</b><span id="elapsed"></span><button id="cancel" class="secondary">Stop watching</button></div><div class="pulse"></div>
-<div class="cols"><div><h2>3 &#xB7; What the agent is doing</h2><div class="legend"><span>&#x25B6; request</span><span>&#x1F441; step</span><span>&#x1F9E0; thinking</span><span>&#x1F50E; SQL</span><span>&#x2705; result</span></div><ul id="timeline"><li class="empty" style="display:block">Pick a scenario above &#x2013; every step the agent takes appears here live.</li></ul></div>
-<div><h2>4 &#xB7; What was found</h2><ul id="summary"><li class="empty" style="border:0;background:none">Results appear here in plain language.</li></ul><div id="files"></div></div></div>
+<div class="cols"><div class="work-panel"><p class="eyebrow">ACTIVITY STREAM</p><h2>What the agent is doing</h2><div class="legend"><span>&#x25B6; request</span><span>&#x25CB; step</span><span>&#x2026; reasoning</span><span>SQL query</span><span>&#x2713; result</span></div><ul id="timeline"><li class="empty" style="display:block">Pick a scenario above &#x2013; every step the agent takes appears here live.</li></ul></div>
+<div class="work-panel"><p class="eyebrow">REVIEW SUMMARY</p><h2>What was found</h2><ul id="summary"><li class="empty" style="border:0;background:none">Results appear here in plain language.</li></ul><div id="files"></div></div></div>
 </section>
-<section class="card"><h2>5 &#xB7; Structured output</h2><pre id="output">The scenario result appears here.</pre>
-</section>
-<section class="card"><details><summary>Advanced / manual request</summary><div class="grid">
+<section class="card" id="structured"><div class="panel"><div class="section-heading"><div><p class="eyebrow">STRUCTURED RECORD</p><h2>Result payload</h2></div><span class="badge">Inspectable output</span></div><pre id="output">The scenario result appears here.</pre></div></section>
+<section class="card advanced" id="advanced"><details><summary>Open advanced connection and manual request controls</summary><div class="grid">
 <div><label>Tunnel HTTPS URL<input id="url" value="TUNNEL_URL_DEFAULT" placeholder="https://&#x2026;devtunnels.ms"></label></div>
 <div><label>API bearer token<input id="bearer" type="password" placeholder="Uses protected local token when blank"></label></div>
 <div><label>Optional tunnel connect token<input id="tunnel" type="password" placeholder="Uses protected local token when blank"></label></div>
@@ -75,12 +171,13 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}.grid{display:
 <div><label>Resources<select id="resources" multiple size="5"><option value="patient">patient</option><option value="encounters">encounters</option><option value="observations" selected>observations</option><option value="documents">documents</option><option value="ecg">ecg</option></select></label></div>
 <div><label>Observation codes (optional, comma-separated)<input id="codes" placeholder="85354-9"></label></div></div>
 <label style="margin-bottom:12px"><input id="bypass" type="checkbox"> Bypass cache</label>
-<div class="row"><button id="submit">Submit custom request</button><button id="clear" class="secondary">Clear fields</button></div><label style="margin-top:12px">Technical job status</label><pre id="meta"></pre></details></section>
-</main><script>
+<div class="form-footer"><button id="clear" class="secondary">Clear fields</button><button id="submit">Submit custom request</button></div><label style="margin-top:12px">Technical job status</label><pre id="meta"></pre></details></section>
+</main></div><script>
 let csrf="CSRF_TOKEN",job="",pending=false,timer,controller,generation=0,polls=0,polling=false,started=0,clock,shown=0;
 const $=id=>document.getElementById(id),ids=["url","bearer","tunnel"],scenarioIds=["browserScenario","fileScenario","sqlScenario"];
 const SKILLS=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob("SKILL_TEXT_DEFAULTS"),x=>x.charCodeAt(0))));
 const SOURCE_SKILLS={ehr:["epic-browser"],files:["local-files"],sql:["sql-desktop"],both:["epic-browser","local-files"]};
+const SOURCE_LABELS={ehr:"Patient portal retrieval",files:"Desktop clinical file retrieval",sql:"Oncology database retrieval",both:"Portal and file retrieval"};
 const ICONS={start:"\u{25B6}",step:"\u{1F441}",query:"\u{1F50E}",thinking:"\u{1F9E0}",agent:"\u{1F4AC}",result:"\u{2705}",done:"\u{1F3C1}",warn:"\u{26A0}\u{FE0F}",error:"\u{26D4}",info:"\u{2139}\u{FE0F}"};
 const secrets=()=>({tunnel_url:$("url").value,bearer_token:$("bearer").value,tunnel_token:$("tunnel").value});
 const scenarioDisabled=value=>scenarioIds.forEach(id=>$(id).disabled=value);
@@ -94,7 +191,7 @@ function renderTimeline(items){if(!Array.isArray(items)||items.length===shown)re
 async function call(route,data,g){controller=new AbortController;let r=await fetch("/api/"+route,{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({...secrets(),...data})});let x=await r.json();if(g!==generation)throw new DOMException("Cancelled","AbortError");if(!r.ok)throw Error(x.error||x.body||"Request failed");return x}
 const selected=()=>[...$("resources").selectedOptions].map(x=>x.value);
 const render=x=>{try{return JSON.stringify(JSON.parse(x),null,2)}catch{return x}};
-function showSkill(source){let names=SOURCE_SKILLS[source]||[];$("skillName").textContent=names.length?names.join(" + "):"choose a scenario";$("skillText").textContent=names.length?names.map(name=>SKILLS[name]).join("\n\n---\n\n"):"Choose a scenario to inspect the instruction.";$("skillPanel").open=true}
+function showSkill(source){let names=SOURCE_SKILLS[source]||[];$("skillName").textContent=names.length?names.join(" + "):"choose a scenario";$("skillText").textContent=names.length?names.map(name=>SKILLS[name]).join("\n\n---\n\n"):"Choose a scenario to inspect the instruction.";$("contextScenario").textContent=SOURCE_LABELS[source]||"Computer-use demonstration";$("skillPanel").open=true}
 function files(list,g){$("files").replaceChildren(...list.map(f=>{let a=document.createElement("a");a.href="#";a.textContent="\u{2B07} Download "+f.name;a.onclick=async e=>{e.preventDefault();try{let r=await fetch("/api/file",{method:"POST",signal:(controller=new AbortController).signal,headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({...secrets(),job_id:job,file_id:f.file_id})});if(g!==generation)throw new DOMException("Cancelled","AbortError");if(!r.ok){let x=await r.json();throw Error(x.error||"Download failed")}let u=URL.createObjectURL(await r.blob()),d=document.createElement("a");d.href=u;d.download=f.name;d.style.display="none";document.body.append(d);d.click();d.remove();setTimeout(()=>URL.revokeObjectURL(u),0)}catch(e){if(e.name!=="AbortError")set(e.message,true)}};return a}))}
 async function fetchResult(g){if($("format").value==="custom"){set("Mapping to your schema\u{2026}");return call("transform",{job_id:job,schema:$("schema").value},g)}return call("result",{job_id:job,format:$("format").value},g)}
 async function poll(g=generation){if(g!==generation||!job||polling)return;if(++polls>600){cancel("Polling timed out");return}polling=true;try{let x=await call("status",{job_id:job},g),b=JSON.parse(x.body);if(g!==generation)return;$("meta").textContent=render(x.body);renderTimeline(b.timeline);if(b.status==="failed"){cancel("Failed");if(b.error)set("Failed \u{2013} "+b.error,true);return}if(b.status==="complete"){let z=await fetchResult(g);if(g!==generation)return;$("output").textContent=render(z.body);$("meta").textContent+="\n"+render(JSON.stringify(z.headers));if($("format").value==="json")files(JSON.parse(z.body).files||[],g);pending=false;busy(false);$("submit").disabled=false;scenarioDisabled(false);set("Complete");return}set(b.status==="queued"?"Queued \u{2013} waiting for the desktop":"Agent at work\u{2026}");timer=setTimeout(()=>{timer=undefined;poll(g)},1000)}catch(e){if(e.name!=="AbortError"&&g===generation)cancel(e.message)}finally{polling=false}}
@@ -107,6 +204,6 @@ $("source").onchange=()=>showSkill($("source").value);
 $("format").onchange=()=>$("schemaBox").hidden=$("format").value!=="custom";
 $("reformat").onclick=async()=>{if(!job||pending)return;let g=generation;try{set("Loading");let z=await fetchResult(g);$("output").textContent=render(z.body);set("Complete")}catch(e){if(e.name!=="AbortError")set(e.message,true)}};
 $("cancel").onclick=()=>cancel();
-$("clear").onclick=()=>{cancel("Idle");ids.forEach(x=>$(x).value="");job="";$("codes").value="";clearResults();placeholder($("timeline"),"Pick a scenario above \u{2013} every step the agent takes appears here live.")};
+$("clear").onclick=()=>{cancel("Idle");ids.forEach(x=>$(x).value="");job="";$("codes").value="";$("contextScenario").textContent="Computer-use demonstration";clearResults();placeholder($("timeline"),"Pick a scenario above \u{2013} every step the agent takes appears here live.")};
 addEventListener("pagehide",()=>$("clear").click());
 </script></body></html>

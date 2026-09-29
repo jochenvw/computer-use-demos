@@ -145,7 +145,7 @@ def make_handler(
         def do_GET(self):
             if not self._same_origin():
                 self._send(403, b'{"error":"Forbidden origin."}')
-            elif self.path == "/":
+            elif urlsplit(self.path).path == "/":
                 self._send(200, page, "text/html; charset=utf-8")
             else:
                 self._send(404, b'{"error":"Not found."}')

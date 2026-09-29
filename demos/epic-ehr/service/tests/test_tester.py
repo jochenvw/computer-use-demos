@@ -26,6 +26,11 @@ class TesterTests(unittest.TestCase):
         self.assertIn("Instruction sent to the agent", page)
         self.assertIn("SKILL_TEXT_DEFAULTS", page)
         self.assertIn("showSkill(source)", page)
+        self.assertIn("--cp-chrome:", page)
+        self.assertIn("DEMO WORKSPACES", page)
+        self.assertIn("Human review required", page)
+        self.assertIn('class="context-banner"', page)
+        self.assertNotIn("linear-gradient", page)
         self.assertTrue(page.isascii())
         self.assertIn('$("browserScenario").onclick', page)
         self.assertIn('$("fileScenario").onclick', page)
@@ -147,7 +152,12 @@ class TesterTests(unittest.TestCase):
         try:
             with urlopen(f"http://127.0.0.1:{relay.server_port}") as response:
                 page = response.read().decode()
+            with urlopen(
+                f"http://127.0.0.1:{relay.server_port}/?scoutTheme=dark"
+            ) as response:
+                themed_page = response.read().decode()
             self.assertIn(defaults["tunnel_url"], page)
+            self.assertEqual(page, themed_page)
             self.assertNotIn("stored-api-token", page)
             self.assertNotIn("stored-tunnel-token", page)
             request = Request(
