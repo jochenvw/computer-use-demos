@@ -44,10 +44,12 @@ foreach ($id in @(Get-NetTCPConnection -LocalPort 8000 -State Listen -EA Silentl
 Start-Sleep 2
 $task = 'EpicDemoApi'
 $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument (
-    "-NoProfile -NoExit -ExecutionPolicy RemoteSigned -File `"$service\run.ps1`" -Port 8000"
+    "-NoProfile -ExecutionPolicy RemoteSigned -File `"$service\run.ps1`" -Port 8000"
 ) -WorkingDirectory $service
 $principal = New-ScheduledTaskPrincipal -UserId 'demoadmin' -LogonType Interactive -RunLevel Limited
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
+# Keep the host non-persistent: the task must end when the API exits so Task Scheduler restarts it.
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1)
 Stop-ScheduledTask -TaskName $task -EA SilentlyContinue
 Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $task

@@ -7,7 +7,6 @@ param(
     [string]$VmName = 'epicdemo-desktop-vm',
     [string]$Location = 'swedencentral',
     [hashtable]$ProtectedParameters = @{},
-    [switch]$StartOnly,
     [switch]$WithAdminCredential
 )
 
@@ -51,7 +50,6 @@ try {
     $properties = $null
     if (Test-Path -LiteralPath $bodyPath) { Remove-Item -LiteralPath $bodyPath -Force }
 }
-if ($StartOnly) { return }
 $deadline = [DateTime]::UtcNow.AddMinutes(32)
 do {
     $raw = & az vm run-command show --subscription $SubscriptionId --resource-group $ResourceGroup `

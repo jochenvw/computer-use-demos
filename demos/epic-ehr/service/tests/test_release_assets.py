@@ -61,6 +61,11 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertIn("Unregister-ScheduledTask", tunnel_host)
         self.assertIn("az vm run-command invoke", publisher)
         self.assertNotIn("-StartOnly", publisher)
+        applier = (
+            ROOT / "demos/epic-ehr/infra/apply-changed-files.ps1"
+        ).read_text(encoding="utf-8")
+        self.assertIn("-RestartCount", applier)
+        self.assertNotIn("-NoExit", applier)
 
     def test_archive_builder_uses_tracked_files_and_blocks_runtime_state(self):
         builder = (
