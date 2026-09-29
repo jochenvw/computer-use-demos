@@ -34,6 +34,9 @@ class ReleaseAssetTests(unittest.TestCase):
         tunnel_host = (
             ROOT / "demos/epic-ehr/infra/host-demo-tunnel.ps1"
         ).read_text(encoding="utf-8")
+        publisher = (
+            ROOT / "demos/epic-ehr/infra/publish-agent.ps1"
+        ).read_text(encoding="utf-8")
         self.assertIn("cosign verify-blob", launcher)
         self.assertIn("--certificate-identity", launcher)
         self.assertIn("cosign-windows-amd64", launcher)
@@ -56,6 +59,8 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertNotIn("Set-Content -LiteralPath $envFile", launcher)
         self.assertIn("EpicDemoRemoteApiTunnel", tunnel_host)
         self.assertIn("Unregister-ScheduledTask", tunnel_host)
+        self.assertIn("az vm run-command invoke", publisher)
+        self.assertNotIn("-StartOnly", publisher)
 
     def test_archive_builder_uses_tracked_files_and_blocks_runtime_state(self):
         builder = (
