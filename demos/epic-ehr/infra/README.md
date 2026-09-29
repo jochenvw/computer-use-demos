@@ -17,10 +17,12 @@ inbound traffic, including SQL 1433, API 8000, and browser CDP 9222. A NAT gatew
 provides explicit outbound access for dependencies, model requests, and devtunnel.
 Its public IP is **not** a VM inbound endpoint.
 Small source archives are delivered through the authenticated Azure VM agent
-channel as protected 12 KiB parts, then reassembled and hash-verified on the VM.
+channel as 4 KiB parts (non-persistent `az vm run-command invoke`, so the
+25-managed-run-command cap is never hit), then reassembled and hash-verified on
+the VM. The parts contain tracked source only, never secrets.
 This needs no storage public endpoint, SAS, account key, or extra data-plane role,
 and stays below Windows command-line limits. The demo publisher caps archives
-at 12 MiB; use an approved private artifact pipeline for larger applications.
+at 4 MiB; use an approved private artifact pipeline for larger applications.
 
 ## Deploy and prepare
 

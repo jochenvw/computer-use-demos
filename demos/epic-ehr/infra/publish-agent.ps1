@@ -19,7 +19,7 @@ try {
     $bytes = [IO.File]::ReadAllBytes($archivePath)
     $partSize = 4096
     $partCount = [int][Math]::Ceiling($bytes.Length / $partSize)
-    if ($partCount -lt 1 -or $partCount -gt 1024) { throw 'Source archive must be between 1 byte and 12 MiB.' }
+    if ($partCount -lt 1 -or $partCount -gt 1024) { throw 'Source archive must be between 1 byte and 4 MiB.' }
     for ($index = 0; $index -lt $partCount; $index++) {
         $offset = $index * $partSize
         $count = [Math]::Min($partSize, $bytes.Length - $offset)
