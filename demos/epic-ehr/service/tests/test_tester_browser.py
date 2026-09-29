@@ -83,10 +83,16 @@ class TesterBrowserTests(unittest.TestCase):
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(f"http://127.0.0.1:{tester.server_port}")
-                    page.locator("details").evaluate("element => element.open = true")
+                    page.locator("details:not(#skillPanel)").evaluate(
+                        "element => element.open = true"
+                    )
                     page.locator("#url").fill(f"http://127.0.0.1:{upstream.server_port}")
                     page.locator("#bearer").fill("synthetic-test-token")
                     page.locator("#browserScenario").click()
+                    expect(page.locator("#skillName")).to_have_text("epic-browser")
+                    expect(page.locator("#skillText")).to_contain_text(
+                        "Epic Mijn Dossier"
+                    )
                     self.assertTrue(status_seen.wait(5))
                     page.wait_for_timeout(1200)
                     expect(page.locator("#browserScenario")).to_be_disabled()
@@ -108,6 +114,10 @@ class TesterBrowserTests(unittest.TestCase):
                     expect(page.locator("#meta")).to_contain_text('"cache_status": "bypass"')
 
                     page.locator("#source").select_option("files")
+                    expect(page.locator("#skillName")).to_have_text("local-files")
+                    expect(page.locator("#skillText")).to_contain_text(
+                        "Desktop assets"
+                    )
                     page.locator("#resources").select_option(["ecg"])
                     page.locator("#format").select_option("json")
                     page.locator("#submit").click()

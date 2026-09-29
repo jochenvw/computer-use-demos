@@ -19,11 +19,20 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
 FORMATS = {"fhir", "fhir-xml", "hl7", "json", "ndjson", "omop"}
+SKILL_NAMES = ("epic-browser", "local-files", "sql-desktop")
 
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+
+def packaged_skill_instructions() -> dict[str, str]:
+    skill_root = Path(__file__).parent / "skills"
+    return {
+        name: (skill_root / name / "SKILL.md").read_text(encoding="utf-8")
+        for name in SKILL_NAMES
+    }
 
 
 def upstream_origin(value: str, allow_loopback: bool = False) -> str:
@@ -97,10 +106,15 @@ def make_handler(
 ):
     defaults = dict(configured_defaults or {})
     default_origin = defaults.get("tunnel_url", "")
+    skill_payload = base64.b64encode(json.dumps(
+        packaged_skill_instructions(), ensure_ascii=True, separators=(",", ":"),
+    ).encode()).decode()
     page = (Path(__file__).parent / "static" / "tester.html").read_bytes().replace(
         b"CSRF_TOKEN", csrf.encode()
     ).replace(
         b"TUNNEL_URL_DEFAULT", html.escape(default_origin, quote=True).encode()
+    ).replace(
+        b"SKILL_TEXT_DEFAULTS", skill_payload.encode()
     )
 
     class Handler(BaseHTTPRequestHandler):

@@ -16,6 +16,9 @@ h2{margin:0 0 12px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
 .scenario:hover:not(:disabled){border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}.scenario:disabled{opacity:.45;cursor:not-allowed}
 .scenario.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--card))}
 .scenario .icon{font-size:30px}.scenario b{font-size:17px}.scenario span{color:var(--muted);font-size:13.5px}.scenario em{font-style:normal;font-size:12px;color:var(--accent2);font-weight:600}
+.instruction{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}.instruction summary{font-size:15px;color:var(--ink)}
+.instruction p{margin:8px 0;color:var(--muted);font-size:13px}.instruction code{color:var(--accent2)}
+.proof{display:inline-block;margin-left:8px;padding:2px 7px;border:1px solid var(--line);border-radius:99px;color:var(--ok);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}label{display:block;font-size:13px;color:var(--muted);font-weight:600}[hidden]{display:none!important}
 select,input,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:4px}
 textarea{width:100%;font:12.5px/1.45 Consolas,monospace}
@@ -49,7 +52,9 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}.grid{display:
 <button id="browserScenario" class="scenario"><div class="icon">&#x1F310;</div><b>Patient portal</b><span>Navigates the logged-in Epic MyChart portal like a person would: opens <i>Uitslagen</i> and reads the lab results.</span><em>Browser &#xB7; ~1 min</em></button>
 <button id="fileScenario" class="scenario"><div class="icon">&#x1FAC0;</div><b>ECG on the desktop</b><span>Finds the ECG image in the local <i>assets</i> folder and transcribes the printed measurements with vision.</span><em>Files &amp; scans &#xB7; ~30 s</em></button>
 <button id="sqlScenario" class="scenario"><div class="icon">&#x1F5C4;&#xFE0F;</div><b>Italian oncology database</b><span>Opens SQL Server Management Studio, explores an Italian schema and writes its own queries.</span><em>Any database &#xB7; ~1 min</em></button>
-</div></section>
+</div><div class="instruction"><details id="skillPanel" open><summary><b>Instruction sent to the agent: <code id="skillName">choose a scenario</code></b><span class="proof">plain text, not automation code</span></summary>
+<p>This is the exact packaged <code>SKILL.md</code> loaded into the isolated Copilot session. It defines the objective, safety boundaries and output contract; the model chooses each action from fresh screenshots.</p>
+<pre id="skillText">Choose Patient portal, ECG on the desktop or Italian oncology database to inspect the instruction.</pre></details></div></section>
 <section class="card"><h2>2 &#xB7; Output format</h2><div class="row">
 <label>Return the data as<select id="format"><option value="fhir">FHIR R4 JSON</option><option value="omop">OMOP CDM JSON</option><option value="json">Normalized JSON</option><option value="fhir-xml">FHIR XML</option><option value="hl7">HL7 v2</option><option value="ndjson">NDJSON</option><option value="custom">Custom schema / ontology&#x2026;</option></select></label>
 <button id="reformat" class="secondary">Show last result in this format</button></div>
@@ -74,6 +79,8 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}.grid{display:
 </main><script>
 let csrf="CSRF_TOKEN",job="",pending=false,timer,controller,generation=0,polls=0,polling=false,started=0,clock,shown=0;
 const $=id=>document.getElementById(id),ids=["url","bearer","tunnel"],scenarioIds=["browserScenario","fileScenario","sqlScenario"];
+const SKILLS=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob("SKILL_TEXT_DEFAULTS"),x=>x.charCodeAt(0))));
+const SOURCE_SKILLS={ehr:["epic-browser"],files:["local-files"],sql:["sql-desktop"],both:["epic-browser","local-files"]};
 const ICONS={start:"\u{25B6}",step:"\u{1F441}",query:"\u{1F50E}",thinking:"\u{1F9E0}",agent:"\u{1F4AC}",result:"\u{2705}",done:"\u{1F3C1}",warn:"\u{26A0}\u{FE0F}",error:"\u{26D4}",info:"\u{2139}\u{FE0F}"};
 const secrets=()=>({tunnel_url:$("url").value,bearer_token:$("bearer").value,tunnel_token:$("tunnel").value});
 const scenarioDisabled=value=>scenarioIds.forEach(id=>$(id).disabled=value);
@@ -87,14 +94,16 @@ function renderTimeline(items){if(!Array.isArray(items)||items.length===shown)re
 async function call(route,data,g){controller=new AbortController;let r=await fetch("/api/"+route,{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({...secrets(),...data})});let x=await r.json();if(g!==generation)throw new DOMException("Cancelled","AbortError");if(!r.ok)throw Error(x.error||x.body||"Request failed");return x}
 const selected=()=>[...$("resources").selectedOptions].map(x=>x.value);
 const render=x=>{try{return JSON.stringify(JSON.parse(x),null,2)}catch{return x}};
+function showSkill(source){let names=SOURCE_SKILLS[source]||[];$("skillName").textContent=names.length?names.join(" + "):"choose a scenario";$("skillText").textContent=names.length?names.map(name=>SKILLS[name]).join("\n\n---\n\n"):"Choose a scenario to inspect the instruction.";$("skillPanel").open=true}
 function files(list,g){$("files").replaceChildren(...list.map(f=>{let a=document.createElement("a");a.href="#";a.textContent="\u{2B07} Download "+f.name;a.onclick=async e=>{e.preventDefault();try{let r=await fetch("/api/file",{method:"POST",signal:(controller=new AbortController).signal,headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({...secrets(),job_id:job,file_id:f.file_id})});if(g!==generation)throw new DOMException("Cancelled","AbortError");if(!r.ok){let x=await r.json();throw Error(x.error||"Download failed")}let u=URL.createObjectURL(await r.blob()),d=document.createElement("a");d.href=u;d.download=f.name;d.style.display="none";document.body.append(d);d.click();d.remove();setTimeout(()=>URL.revokeObjectURL(u),0)}catch(e){if(e.name!=="AbortError")set(e.message,true)}};return a}))}
 async function fetchResult(g){if($("format").value==="custom"){set("Mapping to your schema\u{2026}");return call("transform",{job_id:job,schema:$("schema").value},g)}return call("result",{job_id:job,format:$("format").value},g)}
 async function poll(g=generation){if(g!==generation||!job||polling)return;if(++polls>600){cancel("Polling timed out");return}polling=true;try{let x=await call("status",{job_id:job},g),b=JSON.parse(x.body);if(g!==generation)return;$("meta").textContent=render(x.body);renderTimeline(b.timeline);if(b.status==="failed"){cancel("Failed");if(b.error)set("Failed \u{2013} "+b.error,true);return}if(b.status==="complete"){let z=await fetchResult(g);if(g!==generation)return;$("output").textContent=render(z.body);$("meta").textContent+="\n"+render(JSON.stringify(z.headers));if($("format").value==="json")files(JSON.parse(z.body).files||[],g);pending=false;busy(false);$("submit").disabled=false;scenarioDisabled(false);set("Complete");return}set(b.status==="queued"?"Queued \u{2013} waiting for the desktop":"Agent at work\u{2026}");timer=setTimeout(()=>{timer=undefined;poll(g)},1000)}catch(e){if(e.name!=="AbortError"&&g===generation)cancel(e.message)}finally{polling=false}}
 $("submit").onclick=async()=>{cancel();let g=generation;pending=true;polls=0;clearResults();busy(true);set("Connecting");try{let request={patient_id:$("patient").value,source:$("source").value,resources:selected(),bypass_cache:$("bypass").checked},codes=$("codes").value.split(",").map(x=>x.trim()).filter(Boolean);if(codes.length)request.observation_codes=codes;let x=await call("jobs",{request},g);if(g!==generation)return;job=JSON.parse(x.body).job_id;set("Submitted");poll(g)}catch(e){if(e.name!=="AbortError"&&g===generation)cancel(e.message)}};
-const runScenario=(id,patient,source,resources)=>{scenarioIds.forEach(x=>$(x).classList.toggle("active",x===id));$("patient").value=patient;$("source").value=source;[...$("resources").options].forEach(x=>x.selected=resources.includes(x.value));$("codes").value="";$("bypass").checked=true;$("submit").click();$("live").scrollIntoView({behavior:"smooth",block:"start"})};
+const runScenario=(id,patient,source,resources)=>{scenarioIds.forEach(x=>$(x).classList.toggle("active",x===id));$("patient").value=patient;$("source").value=source;showSkill(source);[...$("resources").options].forEach(x=>x.selected=resources.includes(x.value));$("codes").value="";$("bypass").checked=true;$("submit").click();$("live").scrollIntoView({behavior:"smooth",block:"start"})};
 $("browserScenario").onclick=()=>runScenario("browserScenario","SELF","ehr",["observations"]);
 $("fileScenario").onclick=()=>runScenario("fileScenario","DEMO-100042","files",["ecg","observations"]);
 $("sqlScenario").onclick=()=>runScenario("sqlScenario","SYN-2026-0001","sql",["patient","observations"]);
+$("source").onchange=()=>showSkill($("source").value);
 $("format").onchange=()=>$("schemaBox").hidden=$("format").value!=="custom";
 $("reformat").onclick=async()=>{if(!job||pending)return;let g=generation;try{set("Loading");let z=await fetchResult(g);$("output").textContent=render(z.body);set("Complete")}catch(e){if(e.name!=="AbortError")set(e.message,true)}};
 $("cancel").onclick=()=>cancel();

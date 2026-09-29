@@ -6,7 +6,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from epic_adapter.tester import MAX_RESPONSE_BYTES, fixed_path, make_handler, request_upstream, upstream_origin
+from epic_adapter.tester import (
+    MAX_RESPONSE_BYTES, fixed_path, make_handler, packaged_skill_instructions,
+    request_upstream, upstream_origin,
+)
 
 
 class TesterTests(unittest.TestCase):
@@ -20,6 +23,9 @@ class TesterTests(unittest.TestCase):
         self.assertIn("<b>ECG on the desktop</b>", page)
         self.assertIn("<b>Italian oncology database</b>", page)
         self.assertIn("renderTimeline(b.timeline)", page)
+        self.assertIn("Instruction sent to the agent", page)
+        self.assertIn("SKILL_TEXT_DEFAULTS", page)
+        self.assertIn("showSkill(source)", page)
         self.assertTrue(page.isascii())
         self.assertIn('$("browserScenario").onclick', page)
         self.assertIn('$("fileScenario").onclick', page)
@@ -28,6 +34,15 @@ class TesterTests(unittest.TestCase):
         self.assertIn('$("format").value', page)
         self.assertIn("textContent", page)
         self.assertNotIn("innerHTML", page)
+
+    def test_tester_embeds_the_exact_packaged_text_skills(self):
+        skills = packaged_skill_instructions()
+        self.assertEqual(
+            {"epic-browser", "local-files", "sql-desktop"}, set(skills)
+        )
+        self.assertIn("Epic Mijn Dossier", skills["epic-browser"])
+        self.assertIn("ECG vision", skills["local-files"])
+        self.assertIn("SQL", skills["sql-desktop"])
 
     def test_only_permitted_tunnel_origins_and_fixed_paths(self):
         self.assertEqual("https://demo.devtunnels.ms", upstream_origin("https://demo.devtunnels.ms/"))
