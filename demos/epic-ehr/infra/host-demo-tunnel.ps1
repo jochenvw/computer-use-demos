@@ -17,9 +17,16 @@ $runner = Join-Path $runtime 'host-demo-tunnel.ps1'
 $tokenPath = Join-Path $runtime 'host-token.txt'
 $devtunnel = 'C:\DemoTools\devtunnel\devtunnel.exe'
 $taskName = 'EpicDemoStableTunnel'
+$legacyTaskName = 'EpicDemoRemoteApiTunnel'
 if (-not (Test-Path -LiteralPath $devtunnel)) {
     throw 'Install the dev tunnel tooling first.'
 }
+
+# Older smoke-test deployments owned both port 8000 and the tunnel. Remove
+# that task before installing the stable tunnel so the live agent owns the API.
+Stop-ScheduledTask -TaskName $legacyTaskName -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName $legacyTaskName -Confirm:$false `
+    -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 & icacls.exe $runtime '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)F' | Out-Null
