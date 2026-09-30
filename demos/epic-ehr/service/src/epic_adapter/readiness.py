@@ -16,6 +16,7 @@ from .browser import origin_of
 from .config import Settings
 
 _CDP_TIMEOUT_SECONDS = 2.0
+_SIGNED_OUT_PATH_MARKERS = ("/authentication/", "login", "logout", "logoff", "timeout")
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,13 @@ def _login_readiness(settings: Settings) -> ReadinessCheck:
         return ReadinessCheck(
             "not_ready",
             "The Epic tab is not on the configured authenticated chart URL prefix.",
+        )
+    # The prefix may be the bare origin, so sign-in pages must be excluded explicitly.
+    path = urlsplit(current_url).path.lower()
+    if any(marker in path for marker in _SIGNED_OUT_PATH_MARKERS):
+        return ReadinessCheck(
+            "not_ready",
+            "The Epic tab is on a sign-in page; log in to the portal again.",
         )
     return ReadinessCheck("ready", "The Epic tab is on the authenticated chart URL prefix.")
 

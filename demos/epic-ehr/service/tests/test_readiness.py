@@ -37,6 +37,18 @@ class ReadinessTests(unittest.TestCase):
             checks = check_readiness(config)
         self.assertEqual("ready", checks["epic_login"].status)
 
+    def test_origin_wide_prefix_still_rejects_sign_in_pages(self):
+        config = replace(settings(), epic_ready_url_prefix="https://epic.example.invalid")
+        for url, expected in (
+            ("https://epic.example.invalid/MyChart-PRD/Authentication/Login?", "not_ready"),
+            ("https://epic.example.invalid/MyChart-PRD/Home/Logout?timeout=1", "not_ready"),
+            ("https://epic.example.invalid/MyChart-PRD/Home", "ready"),
+        ):
+            with self.subTest(url=url), patch("epic_adapter.readiness._cdp_get") as get:
+                get.side_effect = [{"Browser": "Edge"}, [{"type": "page", "url": url}]]
+                checks = check_readiness(config)
+                self.assertEqual(expected, checks["epic_login"].status)
+
 
 if __name__ == "__main__":
     unittest.main()
