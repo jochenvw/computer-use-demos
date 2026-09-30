@@ -100,7 +100,7 @@ foreach ($shortcut in @(
 )) {
     $link = $shell.CreateShortcut("$env:PUBLIC\Desktop\$($shortcut.Name).lnk")
     $link.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $link.Arguments = "-NoProfile -NoExit -ExecutionPolicy RemoteSigned -File `"$service\$($shortcut.Script)`"$($shortcut.Extra)"
+    $link.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$service\agent-terminal.ps1`" -Script $($shortcut.Script)$($shortcut.Extra)"
     $link.WorkingDirectory = $service
     $link.Save()
 }

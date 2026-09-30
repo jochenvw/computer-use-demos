@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateRange(1, 65535)][int]$Port = 8000)
+param([ValidateRange(1, 65535)][int]$Port = 8000, [switch]$KeepAlive)
 
 $ErrorActionPreference = 'Stop'
 $envFile = Join-Path $PSScriptRoot '.env'
@@ -81,7 +81,7 @@ Start-Process powershell.exe -ArgumentList $browserArguments `
 Write-Host 'Dedicated Epic browser opened. Log in manually and keep exactly one Epic tab open.'
 Write-Host 'The stable authenticated demo tunnel starts separately and forwards this local API.'
 try {
-   & (Join-Path $PSScriptRoot 'run.ps1') -Port $Port
+   & (Join-Path $PSScriptRoot 'run.ps1') -Port $Port -KeepAlive:$KeepAlive
    exit $LASTEXITCODE
 } finally {
    if ($portal -and -not $portal.HasExited) {

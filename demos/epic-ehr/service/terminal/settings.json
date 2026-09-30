@@ -1,0 +1,62 @@
+{
+    "$help": "Portable Windows Terminal profile for the on-screen agent. Copied on every launch by agent-terminal.ps1; edit here, not on the VM.",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "defaultProfile": "{7d4c2f5a-5a3e-4c1b-9d0e-3f6b1a2c8e41}",
+    "launchMode": "maximized",
+    "theme": "dark",
+    "confirmCloseAllTabs": false,
+    "copyOnSelect": true,
+    "startOnUserLogin": false,
+    "schemes": [
+        {
+            "name": "MDT Observatory",
+            "background": "#0B1A29",
+            "foreground": "#DBE7F1",
+            "cursorColor": "#FD8EA1",
+            "selectionBackground": "#1A2733",
+            "black": "#0B1A29",
+            "red": "#F87171",
+            "green": "#4ADE80",
+            "yellow": "#FBBF24",
+            "blue": "#4DA6FF",
+            "purple": "#FD8EA1",
+            "cyan": "#8EA6BA",
+            "white": "#DBE7F1",
+            "brightBlack": "#5F6B76",
+            "brightRed": "#F87171",
+            "brightGreen": "#4ADE80",
+            "brightYellow": "#FBBF24",
+            "brightBlue": "#4DA6FF",
+            "brightPurple": "#FD8EA1",
+            "brightCyan": "#A9C0D4",
+            "brightWhite": "#FFFFFF"
+        }
+    ],
+    "profiles": {
+        "defaults": {
+            "colorScheme": "MDT Observatory",
+            "font": { "face": "Cascadia Mono, Consolas", "size": 18 },
+            "padding": "20",
+            "cursorShape": "bar",
+            "scrollbarState": "hidden",
+            "bellStyle": "none",
+            "closeOnExit": "graceful"
+        },
+        "list": [
+            {
+                "guid": "{7d4c2f5a-5a3e-4c1b-9d0e-3f6b1a2c8e41}",
+                "name": "Clinical data agent",
+                "commandline": "powershell.exe -NoLogo",
+                "tabTitle": "Clinical data agent",
+                "suppressApplicationTitle": true
+            }
+        ]
+    },
+    "actions": [
+        { "command": { "action": "adjustFontSize", "delta": 2 }, "keys": "ctrl+=" },
+        { "command": { "action": "adjustFontSize", "delta": 2 }, "keys": "ctrl+plus" },
+        { "command": { "action": "adjustFontSize", "delta": -2 }, "keys": "ctrl+minus" },
+        { "command": "resetFontSize", "keys": "ctrl+0" },
+        { "command": "toggleFullscreen", "keys": "f11" }
+    ]
+}

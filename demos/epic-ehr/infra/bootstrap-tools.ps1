@@ -55,6 +55,29 @@ if (-not (Test-Path -LiteralPath $tunnel)) {
 }
 Assert-MicrosoftSignature $tunnel
 
+# Portable Windows Terminal for the zoomable on-screen agent console (Server 2022 has none).
+$terminalRoot = Join-Path $ToolsRoot 'terminal'
+$terminal = Get-ChildItem -LiteralPath $terminalRoot -Recurse -Filter 'wt.exe' -File -EA SilentlyContinue |
+    Select-Object -First 1
+if (-not $terminal) {
+    $release = Invoke-RestMethod 'https://api.github.com/repos/microsoft/terminal/releases/tags/v1.24.11911.0'
+    $asset = @($release.assets | Where-Object name -eq 'Microsoft.WindowsTerminal_1.24.11911.0_x64.zip')
+    if ($asset.Count -ne 1 -or $asset[0].digest -ne 'sha256:7691efeb71c8dd0b95536c84e366fa4cf809a42c534912f9cefa1056534383bd') {
+        throw 'The pinned Windows Terminal release does not provide the expected SHA-256 asset digest.'
+    }
+    $archive = Join-Path $ToolsRoot 'terminal-install.zip'
+    Invoke-WebRequest -UseBasicParsing -Uri $asset[0].browser_download_url -OutFile $archive
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $asset[0].digest.Substring(7)) {
+        throw 'Windows Terminal archive checksum mismatch.'
+    }
+    Expand-Archive -LiteralPath $archive -DestinationPath $terminalRoot -Force
+    Remove-Item -LiteralPath $archive
+    $terminal = Get-ChildItem -LiteralPath $terminalRoot -Recurse -Filter 'wt.exe' -File | Select-Object -First 1
+}
+if (-not $terminal) { throw 'Windows Terminal installation was not found.' }
+Assert-MicrosoftSignature $terminal.FullName
+New-Item -ItemType File -Path (Join-Path $terminal.DirectoryName '.portable') -Force | Out-Null
+
 $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 foreach ($entry in @($uvRoot, $tunnelRoot)) {
     if ($entry -notin $machinePath.Split(';')) { $machinePath += ";$entry" }
@@ -99,6 +122,6 @@ $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut("$env:PUBLIC\Desktop\SQL Server Management Studio.lnk")
 $shortcut.TargetPath = $ssms
 $shortcut.Save()
-[ordered]@{ uv = $uv; edge = $edge; ssms = $ssms } |
+[ordered]@{ uv = $uv; edge = $edge; ssms = $ssms; terminal = $terminal.FullName } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $ToolsRoot 'bootstrap-status.json') -Encoding UTF8
 Write-Output 'Demo tools are ready. Run initialize-sql.ps1 as the VM administrator to seed the synthetic database.'

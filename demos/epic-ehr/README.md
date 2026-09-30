@@ -47,13 +47,14 @@ without repeating the computer work.
 1. **The workstation (remote desktop).** Windows open and the mouse moves; in the
    browser, red rings mark each click. SQL is typed into SSMS. Afterwards the
    agent closes everything it opened.
-2. **The agent console** (black window with the hospital banner). It gives a
-   plain-language running commentary:
-   - `[REQUEST]`: what was asked.
-   - `[STEP]`: what it is doing on screen.
-   - `[SQL]`: the exact query it ran.
-   - `[THINKING]`: a short summary of the model's reasoning.
-   - `[RESULT]`: each value it extracted.
+2. **The agent console** (Windows Terminal, "HEALTH REWIRED MUNICH 2026" block
+   title). It shows the same three acts as the tester (1 · ASK → 2 · WATCH →
+   3 · RECEIVE) and a plain-language running commentary:
+   - `REQUEST`: what was asked.
+   - `ACTION`: what it is doing on screen.
+   - `QUERY`: the exact SQL it ran.
+   - `THINKING`: a short summary of the model's reasoning.
+   - `FOUND`: each value it extracted.
    - `[DONE]`: total time.
 3. **The test page** (browser). Scenario buttons, a live timeline with a spinner,
    a *What was found* summary in readable form, and the formatted output.
@@ -116,6 +117,11 @@ The API listens on `127.0.0.1:8000`. The console shows a plain-language
 timeline per job: steps, SQL queries, reasoning summaries, and extracted values.
 Because it shows clinical values, use synthetic data only. Stop with Ctrl+C.
 
+On the VM the agent opens in a portable Windows Terminal (`agent-terminal.ps1`,
+profile in `service\terminal\settings.json`: 18 pt font, MDT colours). Zoom with
+Ctrl + / Ctrl − (or Ctrl+scroll), F11 for full screen; the header reflows from a
+one-line block title to two lines to plain text as the font grows.
+`run.ps1 -KeepAlive` restarts the agent in the same tab after a crash or deploy.
 Default `EPIC_BACKEND=fixture` runs against synthetic data with no browser/model
 calls. The in-memory demo job store supports one process, at most eight pending
 jobs, and 128 total jobs per session. Restarting clears jobs and results.
@@ -419,9 +425,10 @@ Before the demo:
 
 What the audience sees:
 
-- **VM console window** (Rich TUI): fixed hospital banner with model, skills,
-  and live status, plus a scrolling log in plain clinical language (`[REQUEST]`,
-  `[STEP]`, `[SQL]`, `[THINKING]`, `[RESULT]`, `[DONE]`). `[THINKING]` lines are
+- **VM console window** (Rich TUI in Windows Terminal): big "HEALTH REWIRED
+  MUNICH 2026" title, the ASK → WATCH → RECEIVE acts with live status, plus a
+  scrolling log in plain clinical language (`REQUEST`, `ACTION`, `QUERY`,
+  `THINKING`, `FOUND`, `DONE`). `THINKING` lines are
   the model's reasoning summaries (`EPIC_REASONING_SUMMARY`=`none|concise|detailed`,
   default `concise`). `EPIC_TUI=0` falls back to plain log lines.
 - **Test UI**: the same lines as a live timeline (job status field `timeline`),

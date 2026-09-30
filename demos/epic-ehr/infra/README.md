@@ -121,8 +121,11 @@ Ctrl+C in the tunnel terminal closes the connection.
 ## Try the agent and local tester
 
 The VM desktop is kept demo-clean: **Epic Live Demo** (opens the dedicated
-browser and starts the visible live API), **Microsoft Edge**, **SQL Server
+browser and starts the visible live API in Windows Terminal), **Microsoft Edge**, **SQL Server
 Management Studio** and the **assets** folder used by the files scenario.
+`bootstrap-tools.ps1` installs a pinned, hash-checked portable Windows Terminal
+under `C:\DemoTools\terminal`; the `EpicDemoApi` logon task opens the agent there
+via `service\agent-terminal.ps1 -KeepAlive`.
 
 Operator-only items live in `C:\EpicDemo`: **Configure Epic Agent** (opens the
 private `.env`), **READ ME FIRST.txt** and a sample query. `service\run.ps1`

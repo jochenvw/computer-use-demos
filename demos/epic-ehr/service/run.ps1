@@ -3,7 +3,9 @@ param(
     [ValidateRange(1, 65535)]
     [int]$Port = 8000,
     [switch]$BannerOnly,
-    [switch]$WithTunnel
+    [switch]$WithTunnel,
+    # Restart the agent when it exits (crash or redeploy); Ctrl+C stops the loop.
+    [switch]$KeepAlive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +28,11 @@ try {
     if ($BannerOnly) { $flags += '--banner-only' }
     if ($WithTunnel) { $flags += '--tunnel' }
     & uv run --frozen epic-agent @flags
+    while ($KeepAlive) {
+        Write-Host "`nAgent stopped (exit $LASTEXITCODE). Restarting in 5 s - press Ctrl+C to stop." -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+        & uv run --frozen epic-agent @flags
+    }
     exit $LASTEXITCODE
 } finally {
     Pop-Location

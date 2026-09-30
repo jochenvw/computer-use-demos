@@ -22,6 +22,7 @@ _lock = threading.Lock()
 _timeline: list[dict] | None = None
 _started = 0.0
 _state: dict = {"job": None, "label": "", "since": 0.0}
+_last: dict | None = None
 
 
 def emit(message: str) -> None:
@@ -44,10 +45,10 @@ def end() -> None:
 
 
 def current() -> dict:
-    """Snapshot for the console header: active job label and elapsed seconds."""
+    """Snapshot for the console header: active job, or the last job's outcome."""
     with _lock:
         if not _state["job"]:
-            return {"job": None}
+            return {"job": None, "last": dict(_last) if _last else None}
         return {
             "job": _state["job"], "label": _state["label"],
             "elapsed": time.monotonic() - _state["since"],
@@ -55,6 +56,7 @@ def current() -> dict:
 
 
 def story(kind: str, text: str) -> None:
+    global _last
     kind = kind if kind in KINDS else "info"
     text = " ".join(str(text).split())
     if len(text) > _MAX_TEXT:
@@ -63,6 +65,8 @@ def story(kind: str, text: str) -> None:
         return
     logger.info(text, extra={"story": kind})
     with _lock:
+        if kind in ("done", "error"):
+            _last = {"kind": kind, "label": _state["label"], "text": text}
         if _timeline is not None and len(_timeline) < _MAX_EVENTS:
             _timeline.append({
                 "t": round(time.monotonic() - _started, 1), "kind": kind, "text": text,

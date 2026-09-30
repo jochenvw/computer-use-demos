@@ -43,16 +43,20 @@ foreach ($id in @(Get-NetTCPConnection -LocalPort 8000 -State Listen -EA Silentl
 }
 Start-Sleep 2
 $task = 'EpicDemoApi'
+# The launcher opens the agent in Windows Terminal (run.ps1 -KeepAlive) and returns.
 $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument (
-    "-NoProfile -ExecutionPolicy RemoteSigned -File `"$service\run.ps1`" -Port 8000"
+    "-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$service\agent-terminal.ps1`" -Port 8000 -KeepAlive"
 ) -WorkingDirectory $service
 $principal = New-ScheduledTaskPrincipal -UserId 'demoadmin' -LogonType Interactive -RunLevel Limited
-# Keep the host non-persistent: the task must end when the API exits so Task Scheduler restarts it.
+# Classic-console fallback: the task ends when the API exits so Task Scheduler restarts it.
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
     -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1)
-Stop-ScheduledTask -TaskName $task -EA SilentlyContinue
+$keepAliveHost = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" |
+    Where-Object { $_.CommandLine -like '*run.ps1*-KeepAlive*' })
+if (-not $keepAliveHost) { Stop-ScheduledTask -TaskName $task -EA SilentlyContinue }
 Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Settings $settings -Force | Out-Null
-Start-ScheduledTask -TaskName $task
+# A running keep-alive host restarts the API itself with the new files.
+if (-not $keepAliveHost) { Start-ScheduledTask -TaskName $task }
 $deadline = [DateTime]::UtcNow.AddSeconds(90)
 do { Start-Sleep 2; $h = $null; try { $h = Invoke-RestMethod 'http://127.0.0.1:8000/healthz' -TimeoutSec 2 } catch {} }
 while ($h.status -ne 'ok' -and [DateTime]::UtcNow -lt $deadline)

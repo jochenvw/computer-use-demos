@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 
@@ -66,6 +67,17 @@ class ReleaseAssetTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("-RestartCount", applier)
         self.assertNotIn("-NoExit", applier)
+        self.assertIn("agent-terminal.ps1", applier)
+        self.assertIn("-KeepAlive", applier)
+        bootstrap = (ROOT / "demos/epic-ehr/infra/bootstrap-tools.ps1").read_text(encoding="utf-8")
+        self.assertIn("releases/tags/v1.24.11911.0", bootstrap)
+        self.assertIn("sha256:7691efeb71c8dd0b95536c84e366fa4cf809a42c534912f9cefa1056534383bd", bootstrap)
+        service = ROOT / "demos/epic-ehr/service"
+        launcher = (service / "agent-terminal.ps1").read_text(encoding="utf-8")
+        self.assertIn("7d4c2f5a-5a3e-4c1b-9d0e-3f6b1a2c8e41", launcher)
+        settings = json.loads((service / "terminal/settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(settings["defaultProfile"], settings["profiles"]["list"][0]["guid"])
+        self.assertGreaterEqual(settings["profiles"]["defaults"]["font"]["size"], 16)
 
     def test_archive_builder_uses_tracked_files_and_blocks_runtime_state(self):
         builder = (

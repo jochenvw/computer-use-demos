@@ -25,7 +25,7 @@ $encoding = New-Object Text.UTF8Encoding($false)
 $shell = New-Object -ComObject WScript.Shell
 $link = $shell.CreateShortcut("$env:PUBLIC\Desktop\Epic Live Demo.lnk")
 $link.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$link.Arguments = "-NoProfile -NoExit -ExecutionPolicy RemoteSigned -File `"$launcher`""
+$link.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$service\agent-terminal.ps1`" -Script live.ps1"
 $link.WorkingDirectory = $service
 $link.Save()
 Write-Output 'Epic Live Demo desktop shortcut installed.'

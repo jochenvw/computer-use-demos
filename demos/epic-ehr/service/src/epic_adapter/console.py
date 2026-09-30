@@ -15,76 +15,124 @@ from collections import deque
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
-from rich.console import Console, ConsoleOptions, Group, RenderResult
+from rich.console import Console, ConsoleOptions, Group, RenderableType, RenderResult
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
-from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
 from . import progress
 from .config import Settings
 
-TITLE = "EU HEALTHCARE COMPUTER-USE AGENT"
-SUBTITLE = "Any app · any file · any database  ->  FHIR · OMOP · your schema"
+TITLE = "HEALTH REWIRED"
+EVENT = "MUNICH 2026"
+PRODUCT = "CLINICAL DATA AGENT"
+SUBTITLE = ("Reads any app, file or database the way a clinician would "
+            "->  FHIR · OMOP · your own schema")
 
-# kind -> (badge, badge style, text style)
+# MDT Observatory dark tokens, mirrored from the tester UI (see design-language.md).
+INK = "#dbe7f1"
+MUTED = "#8ea6ba"
+ACCENT = "#fd8ea1"
+SUCCESS = "#4ade80"
+WARNING = "#fbbf24"
+DANGER = "#f87171"
+LINK = "#4da6ff"
+CHROME = "#0b1a29"
+
+# kind -> (badge, badge style, text style); plain words a clinician can follow.
 STYLES = {
-    "start": ("[REQUEST]", "bold white on dark_blue", "bold white"),
-    "step": ("[STEP]", "bold cyan", "cyan"),
-    "query": ("[SQL]", "bold yellow", "yellow"),
-    "thinking": ("[THINKING]", "bold magenta", "italic plum2"),
-    "agent": ("[AGENT]", "bold bright_white", "bright_white"),
-    "result": ("[RESULT]", "bold green", "green"),
-    "done": ("[DONE]", "bold black on green", "bold green"),
-    "warn": ("[NOTE]", "bold dark_orange", "dark_orange"),
-    "error": ("[ERROR]", "bold white on red", "bold red"),
-    "info": ("[INFO]", "bold dodger_blue1", "dodger_blue1"),
+    "start": (" REQUEST ", f"bold {CHROME} on {ACCENT}", f"bold {INK}"),
+    "step": (" ACTION ", f"bold {LINK}", INK),
+    "query": (" QUERY ", f"bold {WARNING}", WARNING),
+    "thinking": (" THINKING ", f"bold {ACCENT}", f"italic {ACCENT}"),
+    "agent": (" AGENT ", f"bold {INK}", INK),
+    "result": (" FOUND ", f"bold {SUCCESS}", SUCCESS),
+    "done": (" DONE ", f"bold {CHROME} on {SUCCESS}", f"bold {SUCCESS}"),
+    "warn": (" NOTE ", f"bold {WARNING}", WARNING),
+    "error": (" PROBLEM ", f"bold {CHROME} on {DANGER}", f"bold {DANGER}"),
+    "info": (" INFO ", f"bold {MUTED}", MUTED),
 }
 BADGE_WIDTH = 11
+FEED_MIN_ROWS = 8
+
+# 5x7 pixel font, rendered with half blocks so each glyph is 5 columns by 4 rows.
+_GLYPHS = {
+    "A": (".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"),
+    "C": (".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."),
+    "D": ("####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."),
+    "E": ("#####", "#....", "#....", "####.", "#....", "#....", "#####"),
+    "H": ("#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"),
+    "I": (".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."),
+    "L": ("#....", "#....", "#....", "#....", "#....", "#....", "#####"),
+    "M": ("#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"),
+    "N": ("#...#", "#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#"),
+    "R": ("####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"),
+    "T": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."),
+    "U": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
+    "W": ("#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"),
+    "0": (".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."),
+    "2": (".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"),
+    "6": ("..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."),
+    " ": ("...",) * 7,
+}
+_CROSS = ("..###..", "..###..", "#######", "#######", "#######", "..###..", "..###..")
 
 
-def hospital_art() -> Text:
-    """A hospital with a red cross; only glyphs present in Consolas/Lucida."""
-    inner = 36
-    total = inner + 2
-    art = Text()
+def _half_blocks(rows: tuple[str, ...] | list[str]) -> list[str]:
+    rows = list(rows) + ["." * len(rows[0])]
+    cells = {("#", "#"): "█", ("#", "."): "▀", (".", "#"): "▄", (".", "."): " "}
+    return ["".join(cells[pair] for pair in zip(top, bottom))
+            for top, bottom in zip(rows[0::2], rows[1::2])]
 
-    def centered(width: int) -> str:
-        return " " * ((total - width) // 2)
 
-    for width in (8, 8, 22, 22, 8, 8):
-        art.append("  " + centered(width))
-        art.append("█" * width + "\n", style="bold red")
-    art.append("  " + "▄" * total + "\n", style="grey85")
-    sign = " + CLINICAL DATA AGENT + "
-    left = (inner - len(sign)) // 2
-    art.append("  █", style="grey85")
-    art.append(" " * left)
-    art.append(sign, style="bold white on red")
-    art.append(" " * (inner - left - len(sign)))
-    art.append("█\n", style="grey85")
-    windows = "  ▓▓ " * 7 + " "
-    for _ in range(2):
-        art.append("  █", style="grey85")
-        art.append(windows, style="bright_cyan")
-        art.append("█\n", style="grey85")
-    for door in ("▐▀▀▀▀▌", "▐    ▌"):
-        art.append("  █", style="grey85")
-        art.append(windows[:15], style="bright_cyan")
-        art.append(door, style="yellow")
-        art.append(windows[21:], style="bright_cyan")
-        art.append("█\n", style="grey85")
-    art.append("  " + "▀" * total + "\n", style="grey85")
-    art.append("═" * (total + 4), style="grey42")
-    return art
+def big_text(text: str, style: str) -> Text:
+    """Block lettering for the conference title (only glyphs present in Consolas)."""
+    glyphs = [_GLYPHS.get(char, _GLYPHS[" "]) for char in text.upper()]
+    rows = [".".join(glyph[row] for glyph in glyphs) for row in range(7)]
+    return Text("\n".join(_half_blocks(rows)), style=style, no_wrap=True)
+
+
+def _width(text: Text) -> int:
+    return max(len(line) for line in text.plain.splitlines())
+
+
+def title_block(width: int, height: int | None = None) -> RenderableType:
+    """Largest title that fits: one line, two stacked lines, or plain text."""
+    cross = Text("\n".join(_half_blocks(_CROSS)), style=f"bold {ACCENT}", no_wrap=True)
+    title = big_text(TITLE, f"bold {INK}")
+    event = big_text(EVENT, f"bold {ACCENT}")
+    gap = 4
+    tall_enough = height is None or height >= 26
+    options = (
+        (True, [title, event]), (False, [title, event]),
+        (True, [Group(title, event)]), (False, [Group(title, event)]),
+    )
+    for with_cross, cells in options:
+        stacked = isinstance(cells[0], Group)
+        needed = (_width(title) if stacked else _width(title) + gap + _width(event))
+        needed += (_width(cross) + gap) if with_cross else 0
+        if width < needed or (stacked and not tall_enough):
+            continue
+        grid = Table.grid(padding=(0, gap))
+        row = ([cross] if with_cross else []) + cells
+        for _ in row:
+            grid.add_column(no_wrap=True)
+        grid.add_row(*row)
+        return grid
+    return Text.assemble(("+ ", f"bold {ACCENT}"), (TITLE, f"bold {INK}"),
+                         ("  ·  ", MUTED), (EVENT, f"bold {ACCENT}"))
+
+
+def _tagline() -> Text:
+    return Text.assemble((PRODUCT, f"bold {MUTED}"), ("   ", ""), (SUBTITLE, INK))
 
 
 def _info_lines(settings: Settings, port: int) -> Table:
     grid = Table.grid(padding=(0, 2))
-    grid.add_column(style="grey62", no_wrap=True)
-    grid.add_column(style="white")
+    grid.add_column(style=MUTED, no_wrap=True)
+    grid.add_column(style=INK)
     grid.add_row("Model", settings.model_deployment or "(not configured)")
     grid.add_row("Reasoning", f"{settings.reasoning_effort} effort · "
                  f"{settings.reasoning_summary} thinking summaries")
@@ -104,12 +152,12 @@ def _legend() -> Text:
 
 
 def show_banner(console: Console, settings: Settings, port: int) -> None:
-    console.print(hospital_art())
-    console.print(Text(f"  {TITLE}", style="bold white"))
-    console.print(Text(f"  {SUBTITLE}\n", style="grey62"))
+    console.print(title_block(console.width))
+    console.print()
+    console.print(_tagline())
     console.print(Panel(
-        Group(_info_lines(settings, port), Text(), _legend(), Text("Stop: Ctrl+C", style="grey50")),
-        title="Clinical data retrieval demo", border_style="red",
+        Group(_info_lines(settings, port), Text(), _legend(), Text("Stop: Ctrl+C", style=MUTED)),
+        title=PRODUCT, border_style=ACCENT,
     ))
 
 
@@ -121,12 +169,12 @@ def render_line(stamp: str, kind: str | None, level: int, message: str) -> Table
     if kind in STYLES:
         badge, badge_style, text_style = STYLES[kind]
     elif level >= logging.ERROR:
-        badge, badge_style, text_style = "[ERROR]", "bold red", "red"
+        badge, badge_style, text_style = STYLES["error"]
     elif level >= logging.WARNING:
-        badge, badge_style, text_style = "[WARN]", "dark_orange", "dark_orange"
+        badge, badge_style, text_style = STYLES["warn"]
     else:
-        badge, badge_style, text_style = "log", "grey42", "grey46"
-    row.add_row(Text(stamp, style="grey50"), Text(badge, style=badge_style), Text(message, style=text_style))
+        badge, badge_style, text_style = " log ", MUTED, MUTED
+    row.add_row(Text(stamp, style=MUTED), Text(badge, style=badge_style), Text(message, style=text_style))
     return row
 
 
@@ -171,64 +219,123 @@ class FeedView:
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         height = max((options.height or console.height) - 2, 1)
         text_width = max(options.max_width - 4 - 8 - BADGE_WIDTH - 2, 20)
-        chosen: list[Table] = []
+        chosen: list[RenderableType] = []
         used = 0
         for stamp, kind, level, message in reversed(list(self.feed.lines)):
-            lines = max(len(Text(message).wrap(console, text_width)), 1)
+            # A blank line before each new request separates the demo runs.
+            lines = max(len(Text(message).wrap(console, text_width)), 1) + (kind == "start")
             if used + lines > height:
                 break
             used += lines
             chosen.append(render_line(stamp, kind, level, message))
+            if kind == "start":
+                chosen.append(Text())
         chosen.reverse()
         body: object = Group(*chosen) if chosen else Text(
-            "Waiting for a request from the test UI…", style="grey50"
+            "Waiting for a request from the demo screen…  press 1, 2 or 3 in the tester.",
+            style=MUTED,
         )
-        yield Panel(body, title="Agent activity", title_align="left",
-                    border_style="grey37", height=height + 2)
+        yield Panel(body, title=Text(" WHAT THE AGENT IS DOING ", style=f"bold {MUTED}"),
+                    title_align="left", border_style=MUTED, height=height + 2, padding=(0, 1))
+
+
+def _pipeline(active: str, failed: bool = False) -> Text:
+    """ASK -> WATCH -> RECEIVE, the same three acts as the tester's Stage mode."""
+    acts = ("ask", "watch", "receive")
+    at = acts.index(active)
+    line = Text()
+    for index, name in enumerate(acts):
+        label = f" {index + 1} · {name.upper()} "
+        if index == at and failed:
+            style = f"bold {CHROME} on {DANGER}"
+        elif index == at:
+            style = f"bold {CHROME} on {SUCCESS if name == 'receive' else ACCENT}"
+        elif index < at:
+            style = f"bold {SUCCESS}"
+        else:
+            style = MUTED
+        line.append(label, style=style)
+        if index < len(acts) - 1:
+            line.append("  ──  ", style=MUTED)
+    return line
+
+
+def status_row() -> Table:
+    state = progress.current()
+    last = state.get("last")
+    if state.get("job"):
+        pulse = "●" if int(time.monotonic() * 2) % 2 else "○"
+        pipe = _pipeline("watch")
+        status = Text.assemble((f"{pulse} Working  ", f"bold {ACCENT}"),
+                               (f"{state['label']} · {state['elapsed']:.0f} s", INK))
+    elif last and last["kind"] == "done":
+        pipe = _pipeline("receive")
+        status = Text.assemble(("● Delivered  ", f"bold {SUCCESS}"), (last["text"], INK))
+    elif last:
+        pipe = _pipeline("watch", failed=True)
+        status = Text.assemble(("● Stopped  ", f"bold {DANGER}"), (last["text"], INK))
+    else:
+        pipe = _pipeline("ask")
+        status = Text.assemble(("● Ready  ", f"bold {SUCCESS}"),
+                               ("waiting for a request from the demo screen", INK))
+    row = Table.grid(padding=(0, 4))
+    row.add_column(no_wrap=True)
+    row.add_column(ratio=1, overflow="fold")
+    row.add_row(pipe, status)
+    return row
 
 
 class Header:
     def __init__(self, settings: Settings, port: int) -> None:
-        self.art = hospital_art()
-        self.info = _info_lines(settings, port)
-        self.spinner = Spinner("line", style="bold yellow")
-
-    def status(self) -> object:
-        state = progress.current()
-        if not state.get("job"):
-            return Text.assemble(("● ", "bold green"), ("Idle – waiting for a request", "green"))
-        self.spinner.text = Text(
-            f" Working · {state['label']} · {state['elapsed']:.0f} s", style="bold yellow"
-        )
-        return self.spinner
+        self.settings = settings
+        self.port = port
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        right = Group(
-            Text(TITLE, style="bold white"),
-            Text(SUBTITLE, style="grey62"),
-            Text(),
-            self.info,
-            Text(),
-            self.status(),
-            Text(),
-            _legend(),
+        yield title_block(options.max_width, console.height)
+        yield Text()
+        yield _tagline()
+        yield Text()
+        yield status_row()
+
+
+class Footer:
+    def __init__(self, settings: Settings, port: int) -> None:
+        self.text = Text(
+            f"{settings.model_deployment or 'model not configured'} · "
+            f"{settings.reasoning_effort} reasoning · API 127.0.0.1:{port} · "
+            "Ctrl + / Ctrl − zoom · Ctrl+C stop",
+            style=MUTED, no_wrap=True, overflow="ellipsis",
         )
-        grid = Table.grid(padding=(0, 3))
-        grid.add_column(no_wrap=True)
-        grid.add_column(ratio=1)
-        grid.add_row(self.art, right)
-        yield grid
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        yield self.text
+
+
+class Screen:
+    """Header sized to its content each frame, so zooming the terminal reflows it."""
+
+    def __init__(self, settings: Settings, port: int, feed: Feed) -> None:
+        self.header = Header(settings, port)
+        self.footer = Footer(settings, port)
+        self.feed = FeedView(feed)
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        height = options.height or console.height
+        header_rows = len(console.render_lines(self.header, options.update(height=None), pad=False))
+        header_rows = min(header_rows, max(height - FEED_MIN_ROWS - 1, 1))
+        layout = Layout()
+        layout.split_column(
+            Layout(self.header, name="header", size=header_rows + 1),
+            Layout(self.feed, name="body"),
+            Layout(self.footer, name="footer", size=1),
+        )
+        yield layout
 
 
 def run_tui(console: Console, settings: Settings, port: int, serve) -> None:
     feed = Feed()
     logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=[feed], force=True)
-    layout = Layout()
-    layout.split_column(
-        Layout(Header(settings, port), name="header", size=hospital_art().plain.count("\n") + 2),
-        Layout(FeedView(feed), name="body"),
-    )
-    with Live(layout, console=console, screen=True, refresh_per_second=8,
+    with Live(Screen(settings, port, feed), console=console, screen=True, refresh_per_second=4,
               redirect_stdout=True, redirect_stderr=True):
         serve()
 
