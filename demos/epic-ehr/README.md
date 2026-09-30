@@ -357,6 +357,16 @@ The URL is prefilled and the credential fields stay blank: the loopback relay
 uses the protected defaults server-side, so no demo-time copy/paste is needed.
 Use `-ManualCredentials` to disable this behavior.
 
+Add `-Stage` (or open `/?mode=stage`, or click **Stage mode** in the header)
+for the presenter layout. It shows one screen in three acts (Ask → Watch →
+Receive) under a sticky Source → Agent → Standard record strip. It uses
+projector-sized text, a large "current step" line, and format chips that
+re-render the last result. The instruction text, output contract, job status and
+connection controls sit behind **Details**. Keys: `1`/`2`/`3` run a source, `F`
+cycles formats, `D` toggles details, `Esc` stops watching. `start-demo.ps1`
+opens Stage mode by default. The tester binds its port exclusively and exits
+with a clear error if another tester already uses it.
+
 The local UI uses a loopback-only same-origin relay rather than changing API
 CORS or using an anonymous tunnel. It accepts only an HTTPS
 `*.devtunnels.ms` origin and fixed job/result/file routes. Secrets are never

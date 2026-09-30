@@ -7,12 +7,28 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from epic_adapter.tester import (
-    MAX_RESPONSE_BYTES, fixed_path, make_handler, packaged_skill_instructions,
-    request_upstream, upstream_origin,
+    MAX_RESPONSE_BYTES, _ExclusiveServer, fixed_path, make_handler,
+    packaged_skill_instructions, request_upstream, upstream_origin,
 )
 
 
 class TesterTests(unittest.TestCase):
+    def test_second_tester_cannot_share_an_occupied_port(self):
+        first = _ExclusiveServer(("127.0.0.1", 0), make_handler("csrf", True))
+        try:
+            with self.assertRaises(OSError):
+                _ExclusiveServer(first.server_address, make_handler("csrf", True))
+        finally:
+            first.server_close()
+
+    def test_stage_mode_is_presenter_ready(self):
+        page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
+        for marker in ('id="pipeline"', 'id="nowStep"', 'id="formatChips"', 'id="stageToggle"',
+                       'id="detailsToggle"', 'id="receiveGrid"', 'get("mode") === "stage"', "html.compact"):
+            self.assertIn(marker, page)
+        launcher = (Path(__file__).parents[2] / "start-demo.ps1").read_text(encoding="utf-8")
+        self.assertIn("-Stage", launcher)
+
     def test_packaged_ui_has_required_safe_request_mapping(self):
         page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
         self.assertIn('let csrf="CSRF_TOKEN"', page)

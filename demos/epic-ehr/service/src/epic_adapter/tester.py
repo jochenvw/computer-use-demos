@@ -228,25 +228,41 @@ def make_handler(
     return Handler
 
 
+class _ExclusiveServer(ThreadingHTTPServer):
+    # SO_REUSEADDR on Windows lets a second tester share the port while a stale one keeps answering.
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Loopback-only Epic API tester.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--open", action="store_true", help="Open the tester in the default browser.")
+    parser.add_argument("--stage", action="store_true", help="Open the presenter (Stage mode) layout.")
     args = parser.parse_args()
     defaults = {
         "tunnel_url": os.getenv("EPIC_TESTER_TUNNEL_URL", ""),
         "bearer_token": os.getenv("EPIC_TESTER_API_BEARER_TOKEN", ""),
         "tunnel_token": os.getenv("EPIC_TESTER_TUNNEL_TOKEN", ""),
     }
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", args.port),
-        make_handler(
-            secrets.token_urlsafe(32),
-            os.getenv("EPIC_TESTER_ALLOW_LOOPBACK") == "1",
-            defaults,
-        ),
-    )
-    address = f"http://127.0.0.1:{args.port}"
+    try:
+        server = _ExclusiveServer(
+            ("127.0.0.1", args.port),
+            make_handler(
+                secrets.token_urlsafe(32),
+                os.getenv("EPIC_TESTER_ALLOW_LOOPBACK") == "1",
+                defaults,
+            ),
+        )
+    except OSError as error:
+        raise SystemExit(
+            f"Port {args.port} is already in use; stop the other Epic tester first. ({error})"
+        ) from error
+    address = f"http://127.0.0.1:{args.port}" + ("/?mode=stage" if args.stage else "")
     print(f"Epic tester: {address}", flush=True)
     if defaults["tunnel_url"] and defaults["bearer_token"]:
         print("Using protected local demo connection; credential fields may remain blank.", flush=True)

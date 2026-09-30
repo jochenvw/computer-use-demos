@@ -54,5 +54,5 @@ if (-not $rdpReady) {
 Start-Process mstsc.exe -ArgumentList "/v:localhost:$RdpPort"
 Write-Host 'In RDP, double-click Epic Live Demo and complete the manual read-only login.'
 & (Join-Path $PSScriptRoot 'service\testing.ps1') -Port $TesterPort `
-    -ResourceGroup $ResourceGroup
+    -ResourceGroup $ResourceGroup -Stage
 exit $LASTEXITCODE

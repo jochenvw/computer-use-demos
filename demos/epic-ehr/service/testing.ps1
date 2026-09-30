@@ -3,7 +3,8 @@ param(
     [ValidateRange(1, 65535)][int]$Port = 8765,
     [string]$ResourceGroup = 'rg-epic-demo-swc',
     [switch]$ManualCredentials,
-    [switch]$NoOpen
+    [switch]$NoOpen,
+    [switch]$Stage
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
@@ -51,6 +52,7 @@ try {
     }
     $arguments = @('run', '--frozen', 'epic-tester', '--port', "$Port")
     if (-not $NoOpen) { $arguments += '--open' }
+    if ($Stage) { $arguments += '--stage' }
     & uv @arguments
     exit $LASTEXITCODE
 } finally {
