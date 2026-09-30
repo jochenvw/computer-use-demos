@@ -28,8 +28,10 @@ from .config import Settings
 TITLE = "HEALTH REWIRED"
 EVENT = "MUNICH 2026"
 PRODUCT = "CLINICAL DATA AGENT"
-SUBTITLE = ("Reads any app, file or database the way a clinician would "
-            "->  FHIR · OMOP · your own schema")
+SUBTITLE = ("Admitted in Italy, now in the Netherlands  ->  "
+            "the Italian hospital record for the Dutch MDT")
+BEFORE = "Before: a FHIR / OMOP mapper for every system."
+NOW = "Now: portals, scans and databases read as they are, in any output format."
 
 # MDT Observatory dark tokens, mirrored from the tester UI (see design-language.md).
 INK = "#dbe7f1"
@@ -127,6 +129,10 @@ def title_block(width: int, height: int | None = None) -> RenderableType:
 
 def _tagline() -> Text:
     return Text.assemble((PRODUCT, f"bold {MUTED}"), ("   ", ""), (SUBTITLE, INK))
+
+
+def _shift() -> Text:
+    return Text.assemble((BEFORE, MUTED), ("   ", ""), (NOW, f"bold {INK}"))
 
 
 def _info_lines(settings: Settings, port: int) -> Table:
@@ -232,7 +238,7 @@ class FeedView:
                 chosen.append(Text())
         chosen.reverse()
         body: object = Group(*chosen) if chosen else Text(
-            "Waiting for a request from the demo screen…  press 1, 2 or 3 in the tester.",
+            "Waiting for the Dutch MDT's request…  press 1, 2 or 3 on the demo screen.",
             style=MUTED,
         )
         yield Panel(body, title=Text(" WHAT THE AGENT IS DOING ", style=f"bold {MUTED}"),
@@ -277,7 +283,7 @@ def status_row() -> Table:
     else:
         pipe = _pipeline("ask")
         status = Text.assemble(("● Ready  ", f"bold {SUCCESS}"),
-                               ("waiting for a request from the demo screen", INK))
+                               ("waiting for the Dutch MDT's request", INK))
     row = Table.grid(padding=(0, 4))
     row.add_column(no_wrap=True)
     row.add_column(ratio=1, overflow="fold")
@@ -294,6 +300,7 @@ class Header:
         yield title_block(options.max_width, console.height)
         yield Text()
         yield _tagline()
+        yield _shift()
         yield Text()
         yield status_row()
 

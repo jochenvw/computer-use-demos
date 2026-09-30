@@ -30,12 +30,24 @@ data, reads it, and hands it over in a standard format:
 
 No integration project and no change to the source system.
 
+### The story (voice-over)
+
+1. A patient on holiday (Italian or Dutch) is admitted to a hospital in Italy.
+2. They are transferred to the Netherlands.
+3. The Dutch multidisciplinary team (MDT) needs the Italian record to agree on treatment.
+4. **Before:** the Italian hospital must build database mappers that emit FHIR, OMOP or similar.
+5. **With the agent:** that no longer matters. It picks up scans, crawls
+   databases, uses apps on screen, and emits whatever output format the MDT asks for.
+
+The demo VM plays the Italian hospital. Both UIs (the tester's case strip and
+pipeline, and the agent console header) use this narrative.
+
 ### The three scenarios
 
 | # | Source | What the agent does | Returns | Time |
 |---|---|---|---|---|
-| 1 | **Patient portal** (Epic MyChart / Mijn Dossier, browser) | Opens the logged-in portal, goes to *Uitslagen* (results), reads the latest lab results | Lab observations with values, units, dates | ~1 min (portal-dependent) |
-| 2 | **ECG printout** (image file on the desktop) | Opens the `assets` folder, opens `ecg.jpg`, reads what is **printed** on it | ECG report + one observation per printed value: rate, PR, QRS, QT, QTc, axes, printed statements | ~30–60 s |
+| 1 | **Hospital patient portal** (Epic MyChart / Mijn Dossier, browser) | Opens the logged-in portal, goes to *Uitslagen* (results), reads the latest lab results | Lab observations with values, units, dates | ~1 min (portal-dependent) |
+| 2 | **Scanned ECG** (image file on the desktop) | Opens the `assets` folder, opens `ecg.jpg`, reads what is **printed** on it | ECG report + one observation per printed value: rate, PR, QRS, QT, QTc, axes, printed statements | ~30–60 s |
 | 3 | **Italian oncology database** (SQL Server Management Studio) | Writes and runs read-only queries on an Italian-language schema (`paziente`, `esame_laboratorio`) | Patient + recent labs (e.g., *Emoglobina*, *Creatinina*, CEA), translated into FHIR/OMOP | ~1 min |
 
 You can switch the output after the run: **FHIR**, **OMOP**, JSON, HL7 v2, or a
@@ -365,7 +377,8 @@ Use `-ManualCredentials` to disable this behavior.
 
 Add `-Stage` (or open `/?mode=stage`, or click **Stage mode** in the header)
 for the presenter layout. It shows one screen in three acts (Ask → Watch →
-Receive) under a sticky Source → Agent → Standard record strip. It uses
+Receive) under a case strip (Italy → Netherlands → Dutch MDT; before/with the
+agent) and a sticky Italian hospital → Agent → For the Dutch MDT strip. It uses
 projector-sized text, a large "current step" line, and format chips that
 re-render the last result. The instruction text, output contract, job status and
 connection controls sit behind **Details**. Keys: `1`/`2`/`3` run a source, `F`
