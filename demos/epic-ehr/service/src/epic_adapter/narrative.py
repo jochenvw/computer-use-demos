@@ -33,7 +33,7 @@ def describe_step(skill: str, name: str, values: dict[str, Any], files: dict | N
     if name == "observe":
         if skill == "sql-desktop" and first_observe:
             return "step", "Opening SQL Server Management Studio on database OncologiaDemo"
-        return "step", f"Looking at the {surface} screen"
+        return "step", f"Looking at the screen in {surface}"
     if name == "click":
         return "step", f"Clicking in {surface} to navigate"
     if name == "scroll":
