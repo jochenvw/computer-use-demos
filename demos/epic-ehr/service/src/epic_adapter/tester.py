@@ -1,4 +1,4 @@
-"""Local-only relay for the Epic demo tester; it is deliberately not a general proxy."""
+"""Local-only relay for the Data Retrieval Agent tester; it is deliberately not a general proxy."""
 from __future__ import annotations
 
 import argparse
@@ -19,7 +19,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
 FORMATS = {"fhir", "fhir-xml", "hl7", "json", "ndjson", "omop"}
-SKILL_NAMES = ("epic-browser", "local-files", "sql-desktop")
+SKILL_NAMES = ("emr-browser", "pacs-viewer", "sql-desktop", "local-files")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -118,7 +118,7 @@ def make_handler(
     )
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "EpicTester"
+        server_version = "AgentTester"
 
         def setup(self):
             super().setup()
@@ -239,7 +239,7 @@ class _ExclusiveServer(ThreadingHTTPServer):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Loopback-only Epic API tester.")
+    parser = argparse.ArgumentParser(description="Loopback-only Data Retrieval Agent tester.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--open", action="store_true", help="Open the tester in the default browser.")
     parser.add_argument("--stage", action="store_true", help="Open the presenter (Stage mode) layout.")
@@ -260,10 +260,10 @@ def main():
         )
     except OSError as error:
         raise SystemExit(
-            f"Port {args.port} is already in use; stop the other Epic tester first. ({error})"
+            f"Port {args.port} is already in use; stop the other agent tester first. ({error})"
         ) from error
     address = f"http://127.0.0.1:{args.port}" + ("/?mode=stage" if args.stage else "")
-    print(f"Epic tester: {address}", flush=True)
+    print(f"Agent tester: {address}", flush=True)
     if defaults["tunnel_url"] and defaults["bearer_token"]:
         print("Using protected local demo connection; credential fields may remain blank.", flush=True)
     if args.open:

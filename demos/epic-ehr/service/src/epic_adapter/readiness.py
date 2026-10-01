@@ -76,22 +76,22 @@ def _login_readiness(settings: Settings) -> ReadinessCheck:
     if len(origin_matches) != 1:
         return ReadinessCheck(
             "not_ready",
-            "Exactly one Epic tab must be open on the approved origin.",
+            "Exactly one EMR tab must be open on the approved origin.",
         )
     current_url = origin_matches[0].get("url", "")
     if not current_url.startswith(settings.epic_ready_url_prefix):
         return ReadinessCheck(
             "not_ready",
-            "The Epic tab is not on the configured authenticated chart URL prefix.",
+            "The EMR tab is not on the configured authenticated chart URL prefix.",
         )
     # The prefix may be the bare origin, so sign-in pages must be excluded explicitly.
     path = urlsplit(current_url).path.lower()
     if any(marker in path for marker in _SIGNED_OUT_PATH_MARKERS):
         return ReadinessCheck(
             "not_ready",
-            "The Epic tab is on a sign-in page; log in to the portal again.",
+            "The EMR tab is on a sign-in page; sign in to the EMR again.",
         )
-    return ReadinessCheck("ready", "The Epic tab is on the authenticated chart URL prefix.")
+    return ReadinessCheck("ready", "The EMR tab is on the authenticated chart URL prefix.")
 
 
 def check_readiness(settings: Settings) -> dict[str, ReadinessCheck]:

@@ -123,7 +123,7 @@ SELECT
     r.DataRilevazione
 FROM dbo.Pazienti AS p
 JOIN dbo.RisultatiLaboratorio AS r ON r.IdPaziente = p.IdPaziente
-WHERE p.IdPaziente = N'DEMO-100042'
+WHERE p.IdPaziente = N'TUS-2026-0417'
 ORDER BY r.IdRisultato;
 '@ | Set-Content -LiteralPath "$root\Italian Patient Demo.sql" -Encoding UTF8
 @'
@@ -172,7 +172,7 @@ try {
     if ($health.status -ne 'ok') { throw 'Installed API health check timed out.' }
     $headers = @{ Authorization = 'Bearer ' + $env:API_BEARER_TOKEN }
     $job = Invoke-RestMethod 'http://127.0.0.1:18000/v1/retrieval-jobs' -Method Post -Headers $headers `
-        -ContentType 'application/json' -Body '{"patient_id":"DEMO-100042","source":"ehr","resources":["observations"],"observation_codes":["85354-9"]}'
+        -ContentType 'application/json' -Body '{"patient_id":"TUS-2026-0417","source":"ehr","resources":["observations"],"observation_codes":["85354-9"]}'
     do {
         $status = Invoke-RestMethod "http://127.0.0.1:18000$($job.status_url)" -Headers $headers
         if ($status.status -in @('complete', 'failed')) { break }

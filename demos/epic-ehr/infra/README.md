@@ -1,4 +1,4 @@
-# Private SQL / Epic demo VM
+# Private SQL / EMR demo VM (Ospedale di Montalcino)
 
 The default deployment is a **SQL Server 2022 Developer / Windows Server 2022**
 desktop in **Sweden Central**. SQL Developer is for development and testing,
@@ -120,9 +120,11 @@ Ctrl+C in the tunnel terminal closes the connection.
 
 ## Try the agent and local tester
 
-The VM desktop is kept demo-clean: **Epic Live Demo** (opens the dedicated
-browser and starts the visible live API in Windows Terminal), **Microsoft Edge**, **SQL Server
-Management Studio** and the **assets** folder used by the files scenario.
+The VM desktop is kept demo-clean: **Epic Live Demo** (legacy name; starts the
+loopback synthetic EMR/PACS of *Ospedale di Montalcino*, opens it in the dedicated
+browser and starts the visible live API in Windows Terminal), **Microsoft Edge**
+and **SQL Server Management Studio**. Delete any old Desktop `assets` folder:
+the demo uses synthetic data only (patient Anna Ricci, `TUS-2026-0417`).
 `bootstrap-tools.ps1` installs a pinned, hash-checked portable Windows Terminal
 under `C:\DemoTools\terminal`; the `EpicDemoApi` logon task opens the agent there
 via `service\agent-terminal.ps1 -KeepAlive`.
@@ -164,15 +166,17 @@ The masked fields remain blank and no copy/paste is required. Pass
 does not persist credentials and does not require wildcard CORS or an anonymous
 tunnel.
 
-**Quick BP** selects the synthetic BP panel. Repeat a request for a cache hit;
-check **Bypass cache** to run fresh work. **ECG file** selects the file source.
+Buttons **1 / 2 / 3** run EMR, PACS and the Italian database for Anna with the
+visible instruction. Repeat a request for a cache hit; check **Bypass cache** to
+run fresh work. The ECG fallback is in **Details** (source *ECG file*).
 FHIR JSON is the default; JSON output includes original-file download links.
 See `..\DEMO_SCRIPT.md` for the detailed API walkthrough.
 
-For live Epic browser work, configure `EPIC_BACKEND=copilot`, the explicit
-computer-use opt-in, exact Epic HTTPS origin, and an authorized Copilot token
-or Azure BYOM identity. Start `service\browser.ps1` and log into Epic manually
-using a read-only account before restarting the agent. Keep the interactive
+For live EMR browser work, configure `EPIC_BACKEND=copilot`, the explicit
+computer-use opt-in, `EPIC_SYNTHETIC_PORTAL=1` with the loopback origin
+`http://127.0.0.1:8001` (set by `apply-changed-files.ps1`), and an authorized
+Copilot token or Azure BYOM identity. For a real EMR use its exact HTTPS origin
+and sign in manually with a read-only account before restarting the agent. Keep the interactive
 desktop available. Fixture mode and cache hits intentionally do not perform
 computer use.
 
@@ -208,7 +212,7 @@ reply. It persists the endpoint and deployment in the private `.env` only after
 that round trip succeeds. It never prints an access token or changes the API
 bearer, backend, browser opt-in, or running API/tunnel processes.
 
-This verifies **model access, not Epic retrieval**. To prepare the browser, run
+This verifies **model access, not EMR retrieval**. To prepare the browser, run
 the following inside the interactive VM desktop and log in manually to the
 authorized demo environment with a read-only account:
 
@@ -230,15 +234,13 @@ region; use synthetic data for this demo.
 
 ## SQL / SSMS
 
-SSMS connects to `localhost` using Windows authentication. Open the desktop
-query against `EpicDemo`: it contains one explicitly synthetic patient and
-systolic/diastolic observations (120/80 mmHg).
-
-**The API does not yet control SSMS or expose a database retrieval source.**
-The installed SQL/SSMS environment prepares for a future dedicated desktop
-skill. The existing Epic skill controls only the approved browser tab.
-Establish a read-only database identity before any future SQL computer-use
-demo; the VM administrator is intentionally privileged for initial setup.
+SSMS connects to `localhost` using Windows authentication. Scenario 3 uses the
+Italian-language `OncologiaDemo` database (`source: sql`, `sql-desktop` skill,
+read-only queries only). Add Anna once with `seed-anna-oncologia.sql`
+(idempotent): `sqlcmd -S localhost -E -d OncologiaDemo -b -i .\seed-anna-oncologia.sql`.
+`EpicDemo` holds one older synthetic BP record and is not used on stage.
+Use a read-only database identity for the agent; the VM administrator is
+intentionally privileged for initial setup only.
 
 ## Cost and lifecycle
 

@@ -26,11 +26,16 @@ from .progress import begin, emit, end, story
 logger = logging.getLogger(__name__)
 
 SCENARIO_LABELS = {
-    RetrievalSource.ehr: "Patient portal (browser)",
-    RetrievalSource.files: "Clinical files on this workstation",
-    RetrievalSource.sql: "Italian oncology database (SSMS)",
-    RetrievalSource.both: "Patient portal + clinical files",
+    RetrievalSource.ehr: "1 - Clinical data from the EMR",
+    RetrievalSource.pacs: "2 - Medical imaging from PACS",
+    RetrievalSource.sql: "3 - Local Italian database (unknown schema)",
+    RetrievalSource.files: "Fallback - ECG file on this workstation",
+    RetrievalSource.both: "EMR + local files",
 }
+HANDOVER = (
+    "Handing over to the MDT dashboard, UMC Utrecht, in the requested standard: "
+    "FHIR, OMOP or a custom schema"
+)
 
 
 class ServiceDrainingError(RuntimeError):
@@ -47,7 +52,8 @@ class JobService:
         cache: RetrievalCache | None = None,
         backend_scope: str = "fixture",
         file_retriever: Callable[[str, list[ResourceType], FileCatalog], ClinicalBundle] | None = None,
-        database_retriever: Callable[[str, list[ResourceType]], ClinicalBundle] | None = None,
+        database_retriever: Callable[..., ClinicalBundle] | None = None,
+        pacs_retriever: Callable[..., ClinicalBundle] | None = None,
     ) -> None:
         self._adapter = adapter
         self._file_catalog = file_catalog
@@ -56,6 +62,7 @@ class JobService:
         self._backend_scope = backend_scope
         self._file_retriever = file_retriever
         self._database_retriever = database_retriever
+        self._pacs_retriever = pacs_retriever
         self._jobs: dict[str, JobRecord] = {}
         self._gui_lock = threading.Lock()
         self._records_lock = threading.Lock()
@@ -154,6 +161,8 @@ class JobService:
                     job.status = JobStatus.running
                 begin(job.timeline, label, job_id)
                 emit(f"JOB {job_id[:8]}  running")
+                if request.instruction:
+                    story("task", request.instruction)
                 story("start", f"New request · {label} · patient {request.patient_id} · "
                       f"asking for: {', '.join(r.value for r in request.resources)}")
                 key = self._cache.key(request, caller_id, self._backend_scope)
@@ -172,24 +181,36 @@ class JobService:
                 if entry is None:
                     resources = []
                     files = []
+                    extra = {
+                        key: value for key, value in {
+                            "instruction": request.instruction,
+                            "patient_name": request.display_name(),
+                        }.items() if value
+                    }
                     if request.source in {RetrievalSource.ehr, RetrievalSource.both}:
-                        emit("EHR      retrieving requested chart resources")
-                        resources = self._adapter.retrieve(request.patient_id, request.resources)
-                    if request.source == RetrievalSource.sql:
-                        if self._database_retriever is None:
-                            raise RuntimeError("SQL computer-use retrieval is not configured.")
-                        emit("SQL      navigating the approved local SSMS workspace")
-                        database = self._database_retriever(
-                            request.patient_id, request.resources,
+                        emit("EMR      retrieving requested chart resources")
+                        resources = self._adapter.retrieve(
+                            request.patient_id, request.resources, **extra,
                         )
-                        if database.patient_id != request.patient_id:
-                            raise ValueError("SQL retrieval patient mismatch.")
-                        resources.extend(database.resources)
-                        files.extend(database.files)
+                    for source, retriever, tag in (
+                        (RetrievalSource.sql, self._database_retriever, "SQL"),
+                        (RetrievalSource.pacs, self._pacs_retriever, "PACS"),
+                    ):
+                        if request.source != source:
+                            continue
+                        if retriever is None:
+                            raise RuntimeError(f"{tag} retrieval is not configured.")
+                        emit(f"{tag:<8} navigating the approved local workspace")
+                        found = retriever(request.patient_id, request.resources, **extra)
+                        if found.patient_id != request.patient_id:
+                            raise ValueError(f"{tag} retrieval patient mismatch.")
+                        resources.extend(found.resources)
+                        files.extend(found.files)
                     if request.source in {RetrievalSource.files, RetrievalSource.both}:
                         if self._file_retriever is not None:
                             local = self._file_retriever(
                                 request.patient_id, request.resources, self._file_catalog,
+                                **extra,
                             )
                             if local.patient_id != request.patient_id:
                                 raise ValueError("Local-file retrieval patient mismatch.")
@@ -225,8 +246,8 @@ class JobService:
                     self._idle.notify_all()
                 emit(f"JOB {job_id[:8]}  complete / {len(bundle.resources)} resource(s), {len(bundle.files)} file(s)")
                 story("done", f"Done in {time.monotonic() - started:.0f} s · "
-                      f"{len(bundle.resources)} clinical item(s) ready as FHIR, OMOP "
-                      "or any schema you provide")
+                      f"{len(bundle.resources)} clinical item(s) collected")
+                story("handover", HANDOVER)
                 end()
         except Exception as exc:
             job.error = "Retrieval failed. Contact the service operator with the job ID."
@@ -235,7 +256,7 @@ class JobService:
                 # Fixed enum values only; safe to show the caller.
                 job.error = reason
                 if reason.endswith("session_expired."):
-                    job.error += " Log in to Mijn Dossier in the VM's Edge window, then retry."
+                    job.error += " Sign in to the EMR in the VM's Edge window, then retry."
                 elif reason.endswith("rdp_minimized."):
                     job.error += (
                         " The VM screen is not rendering: restore or reconnect the RDP"

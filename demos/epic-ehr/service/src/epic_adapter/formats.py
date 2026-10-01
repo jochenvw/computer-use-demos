@@ -112,7 +112,7 @@ def omop_json(bundle: ClinicalBundle) -> dict[str, Any]:
                     "measurement_source_value": _concept_code(component.get("code")),
                     "measurement_source_text": _concept_text(component.get("code")),
                 })
-        elif resource.resource_type in {ResourceType.documents, ResourceType.ecg}:
+        elif resource.resource_type in {ResourceType.documents, ResourceType.imaging, ResourceType.ecg}:
             tables["note"].append({
                 "note_id": _omop_id("note", resource.source_id),
                 "person_id": person_id,
@@ -384,7 +384,7 @@ def hl7_oru(bundle: ClinicalBundle) -> str:
         raise ValueError("HL7 requires a patient identifier")
     observations = [
         resource for resource in bundle.resources
-        if resource.resource_type in {ResourceType.observations, ResourceType.ecg}
+        if resource.resource_type in {ResourceType.observations, ResourceType.imaging, ResourceType.ecg}
     ]
     if not observations:
         raise ValueError("HL7 ORU requires at least one recorded observation")
@@ -405,7 +405,7 @@ def hl7_oru(bundle: ClinicalBundle) -> str:
             # Project only recorded report text; never resolve attachments as values.
             data = {**data, "valueString": data.get("conclusion")}
         elif "conclusion" in data or "conclusionCode" in data:
-            raise ValueError("HL7 conclusion requires an ECG DiagnosticReport")
+            raise ValueError("HL7 conclusion requires an ECG or imaging DiagnosticReport")
         code = _hl7_code(data.get("code"))
         status = {
             "registered": "I", "preliminary": "P", "final": "F",
@@ -555,7 +555,7 @@ def _resource_name(resource: ClinicalResource) -> str:
         return "Patient"
     if resource.resource_type == ResourceType.encounters:
         return "Encounter"
-    if resource.resource_type == ResourceType.ecg and (
+    if resource.resource_type in {ResourceType.ecg, ResourceType.imaging} and (
         resource.data.get("resourceType") == "DiagnosticReport"
         or "conclusion" in resource.data
         or "conclusionCode" in resource.data
@@ -563,6 +563,7 @@ def _resource_name(resource: ClinicalResource) -> str:
         return "DiagnosticReport"
     if resource.resource_type in {
         ResourceType.observations,
+        ResourceType.imaging,
         ResourceType.ecg,
     }:
         return "Observation"

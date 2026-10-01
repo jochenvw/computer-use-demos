@@ -59,12 +59,12 @@ IF OBJECT_ID(N'dbo.Observations', N'U') IS NULL
 CREATE TABLE dbo.Observations (ObservationId int NOT NULL PRIMARY KEY, PatientId nvarchar(64) NOT NULL REFERENCES dbo.Patients(PatientId),
     LoincCode nvarchar(20) NOT NULL, Description nvarchar(100) NOT NULL, NumericValue decimal(10,2) NOT NULL,
     Unit nvarchar(20) NOT NULL, RecordedAt datetime2 NOT NULL);
-IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE PatientId=N'DEMO-100042')
-INSERT dbo.Patients VALUES (N'DEMO-100042', N'Jamie Rivera (synthetic)', 1);
-IF NOT EXISTS (SELECT 1 FROM dbo.Observations WHERE ObservationId=1)
-INSERT dbo.Observations VALUES (1,N'DEMO-100042',N'8480-6',N'Synthetic systolic blood pressure',120,N'mm[Hg]','2026-09-10T09:10:00');
-IF NOT EXISTS (SELECT 1 FROM dbo.Observations WHERE ObservationId=2)
-INSERT dbo.Observations VALUES (2,N'DEMO-100042',N'8462-4',N'Synthetic diastolic blood pressure',80,N'mm[Hg]','2026-09-10T09:10:00');
+IF NOT EXISTS (SELECT 1 FROM dbo.Patients WHERE PatientId=N'TUS-2026-0417')
+INSERT dbo.Patients VALUES (N'TUS-2026-0417', N'Anna Ricci (synthetic)', 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.Observations WHERE ObservationId=11)
+INSERT dbo.Observations VALUES (11,N'TUS-2026-0417',N'8480-6',N'Synthetic systolic blood pressure',120,N'mm[Hg]','2026-09-19T08:00:00');
+IF NOT EXISTS (SELECT 1 FROM dbo.Observations WHERE ObservationId=12)
+INSERT dbo.Observations VALUES (12,N'TUS-2026-0417',N'8462-4',N'Synthetic diastolic blood pressure',80,N'mm[Hg]','2026-09-19T08:00:00');
 
 IF OBJECT_ID(N'dbo.Pazienti', N'U') IS NULL
 CREATE TABLE dbo.Pazienti (
@@ -84,20 +84,20 @@ CREATE TABLE dbo.RisultatiLaboratorio (
     UnitaMisura nvarchar(20) NOT NULL,
     DataRilevazione datetime2 NOT NULL
 );
-IF NOT EXISTS (SELECT 1 FROM dbo.Pazienti WHERE IdPaziente=N'DEMO-100042')
+IF NOT EXISTS (SELECT 1 FROM dbo.Pazienti WHERE IdPaziente=N'TUS-2026-0417')
 INSERT dbo.Pazienti VALUES (
-    N'DEMO-100042', N'Giulia Bianchi (sintetico)', '1984-05-17', N'F', 1
+    N'TUS-2026-0417', N'Anna Ricci (sintetico)', '1971-03-14', N'F', 1
 );
-IF NOT EXISTS (SELECT 1 FROM dbo.RisultatiLaboratorio WHERE IdRisultato=101)
+IF NOT EXISTS (SELECT 1 FROM dbo.RisultatiLaboratorio WHERE IdRisultato=201)
 INSERT dbo.RisultatiLaboratorio VALUES
-    (101,N'DEMO-100042',N'718-7',N'Emoglobina',8.60,N'mmol/L','2026-09-18T08:30:00'),
-    (102,N'DEMO-100042',N'6690-2',N'Leucociti',6.40,N'10*9/L','2026-09-18T08:30:00'),
-    (103,N'DEMO-100042',N'1988-5',N'Proteina C reattiva',2.00,N'mg/L','2026-09-18T08:30:00'),
-    (104,N'DEMO-100042',N'2160-0',N'Creatinina',78.00,N'umol/L','2026-09-18T08:30:00'),
-    (105,N'DEMO-100042',N'2345-7',N'Glucosio',5.10,N'mmol/L','2026-09-18T08:30:00');
+    (201,N'TUS-2026-0417',N'718-7',N'Emoglobina',8.10,N'g/dL','2026-09-18T23:05:00'),
+    (202,N'TUS-2026-0417',N'6690-2',N'Leucociti',7.20,N'10*3/uL','2026-09-18T23:05:00'),
+    (203,N'TUS-2026-0417',N'1988-5',N'Proteina C reattiva',6.10,N'mg/L','2026-09-18T23:05:00'),
+    (204,N'TUS-2026-0417',N'2160-0',N'Creatinina',0.80,N'mg/dL','2026-09-18T23:05:00'),
+    (205,N'TUS-2026-0417',N'2039-6',N'CEA',18.40,N'ng/mL','2026-09-19T07:30:00');
 '@
     $command.ExecuteNonQuery() | Out-Null
-    $command.CommandText = 'SELECT COUNT(*) FROM dbo.RisultatiLaboratorio WHERE IdPaziente = N''DEMO-100042'''
+    $command.CommandText = 'SELECT COUNT(*) FROM dbo.RisultatiLaboratorio WHERE IdPaziente = N''TUS-2026-0417'''
     $count = $command.ExecuteScalar()
     $command.Dispose()
 } finally {

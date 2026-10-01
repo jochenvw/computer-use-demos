@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('browser', 'files', 'sql')][string]$Scenario = 'browser',
+    [ValidateSet('emr', 'pacs', 'sql', 'files')][string]$Scenario = 'emr',
     [ValidateSet('fhir', 'omop', 'json')][string]$Format = 'fhir',
     [string]$Schema = '',
     [int]$TimeoutSeconds = 420,
@@ -22,10 +22,14 @@ $headers = @{
     'X-Tunnel-Authorization' = 'tunnel ' + (Read-Secret (Join-Path $state 'vm-tunnel-connect-token.xml'))
 }
 $request = @{
-    browser = @{ patient_id = 'SELF'; source = 'ehr'; resources = @('observations') }
-    files = @{ patient_id = 'DEMO-100042'; source = 'files'; resources = @('ecg', 'observations') }
-    sql = @{ patient_id = 'SYN-2026-0001'; source = 'sql'; resources = @('patient', 'observations') }
+    emr = @{ source = 'ehr'; resources = @('patient', 'encounters', 'observations', 'documents') }
+    pacs = @{ source = 'pacs'; resources = @('imaging') }
+    sql = @{ source = 'sql'; resources = @('patient', 'observations') }
+    files = @{ source = 'files'; resources = @('ecg', 'observations') }
 }[$Scenario]
+# Same visible task for every scenario; the agent discovers where the data lives.
+$request.patient_id = 'TUS-2026-0417'
+$request.instruction = 'Retrieve all relevant medical information for patient Anna Ricci.'
 $request.bypass_cache = $true
 $job = Invoke-RestMethod "$origin/v1/retrieval-jobs" -Method Post -Headers $headers `
     -ContentType 'application/json' -Body ($request | ConvertTo-Json)

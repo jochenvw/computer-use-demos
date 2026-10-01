@@ -127,7 +127,7 @@ function Test-Release([string]$ReleaseRoot) {
         $headers = @{ Authorization = 'Bearer ' + $env:API_BEARER_TOKEN }
         $job = Invoke-RestMethod "http://127.0.0.1:$testPort/v1/retrieval-jobs" -Method Post `
             -Headers $headers -ContentType 'application/json' `
-            -Body '{"patient_id":"DEMO-100042","source":"ehr","resources":["observations"],"observation_codes":["85354-9"]}'
+            -Body '{"patient_id":"TUS-2026-0417","source":"ehr","resources":["observations"],"observation_codes":["85354-9"]}'
         do {
             $status = Invoke-RestMethod "http://127.0.0.1:$testPort$($job.status_url)" -Headers $headers
             if ($status.status -in @('complete', 'failed')) { break }

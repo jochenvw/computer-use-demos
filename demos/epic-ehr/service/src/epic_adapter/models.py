@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Any
@@ -13,6 +14,7 @@ class ResourceType(str, Enum):
     encounters = "encounters"
     observations = "observations"
     documents = "documents"
+    imaging = "imaging"
     ecg = "ecg"
 
 
@@ -28,6 +30,7 @@ class OutputFormat(str, Enum):
 class RetrievalSource(str, Enum):
     files = "files"
     ehr = "ehr"
+    pacs = "pacs"
     sql = "sql"
     both = "both"
 
@@ -38,12 +41,25 @@ class RetrievalRequest(BaseModel):
     )
     source: RetrievalSource = RetrievalSource.both
     resources: list[ResourceType] = Field(
-        default_factory=lambda: list(ResourceType), min_length=1, max_length=5
+        default_factory=lambda: list(ResourceType), min_length=1, max_length=6
+    )
+    # Visible natural-language task; never names a system, path, table or click path.
+    instruction: str | None = Field(
+        default=None, min_length=1, max_length=200, pattern=r"^[A-Za-z0-9 ,.'-]+$",
+    )
+    patient_name: str | None = Field(
+        default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z '-]*$",
     )
     observation_codes: list[Annotated[str, Field(
         min_length=1, max_length=64, pattern=r"^[A-Za-z0-9.-]+$",
     )]] = Field(default_factory=list, max_length=32)
     bypass_cache: bool = False
+
+    def display_name(self) -> str | None:
+        if self.patient_name:
+            return self.patient_name.strip()
+        match = re.search(r"for patient ([A-Za-z][A-Za-z '-]*?)\.?$", self.instruction or "")
+        return match.group(1).strip() if match else None
 
 
 class SourceRecord(BaseModel):

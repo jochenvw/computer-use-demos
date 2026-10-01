@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<SyntheticEcg patientId="DEMO-100042">
-  <AcquiredAt>2026-09-10T09:15:00Z</AcquiredAt>
-  <Interpretation>Training data only. Synthetic sinus rhythm.</Interpretation>
-</SyntheticEcg>

@@ -29,19 +29,41 @@ function Set-EnvValue([string]$Name, [string]$Value) {
     }
     $lines.Add("$Name=$Value")
 }
-Set-EnvValue 'EPIC_ASSET_ROOTS' 'C:\Users\demoadmin\Desktop\assets'
+# Scenario 1/2 target the loopback synthetic EMR + PACS (Ospedale di Montalcino); no real data.
+foreach ($name in @('EPIC_ASSET_ROOTS', 'EPIC_PERSONAL_PORTAL', 'EPIC_NAVIGATION_HINTS')) {
+    for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+        if ($lines[$i] -match ('^\s*' + $name + '=')) { $lines.RemoveAt($i) }
+    }
+}
+Set-EnvValue 'EPIC_SYNTHETIC_PORTAL' '1'
+Set-EnvValue 'EPIC_ORIGIN' 'http://127.0.0.1:8001'
+Set-EnvValue 'EPIC_READY_URL_PREFIX' 'http://127.0.0.1:8001/'
+Set-EnvValue 'EPIC_BROWSER_WINDOW_TITLE' 'Ospedale di Montalcino - Postazione clinica'
 Set-EnvValue 'EPIC_FILE_ROOTS' 'none'
 Set-EnvValue 'EPIC_SKILL_TIMEOUT_SECONDS' '420'
 Set-EnvValue 'EPIC_MAX_BROWSER_STEPS' '80'
 Set-EnvValue 'EPIC_DIAGNOSTICS_DIR' 'C:\EpicDemo\service\diagnostics'
 [IO.File]::WriteAllLines($envPath, [string[]]$lines, (New-Object Text.UTF8Encoding($false)))
 
-# Restart only the API listener; keep Edge (Epic login) and the tunnel running.
+# Restart only the API listener; keep Edge (EMR session) and the tunnel running.
 foreach ($id in @(Get-NetTCPConnection -LocalPort 8000 -State Listen -EA SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique)) {
     Stop-Process -Id $id -Force -EA SilentlyContinue
 }
 Start-Sleep 2
+# Synthetic EMR + PACS (loopback :8001) as its own restartable task; reload on every apply.
+foreach ($id in @(Get-NetTCPConnection -LocalPort 8001 -State Listen -EA SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)) {
+    Stop-Process -Id $id -Force -EA SilentlyContinue
+}
+$emrAction = New-ScheduledTaskAction -Execute "$service\.venv\Scripts\python.exe" `
+    -Argument '-m epic_adapter.synthetic_emr --port 8001' -WorkingDirectory $service
+$emrSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1)
+$emrPrincipal = New-ScheduledTaskPrincipal -UserId 'demoadmin' -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName 'EpicDemoEmr' -Action $emrAction -Principal $emrPrincipal `
+    -Settings $emrSettings -Force | Out-Null
+Start-ScheduledTask -TaskName 'EpicDemoEmr'
 $task = 'EpicDemoApi'
 # The launcher opens the agent in Windows Terminal (run.ps1 -KeepAlive) and returns.
 $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument (
@@ -65,5 +87,5 @@ $listener = Get-NetTCPConnection -LocalPort 8000 -State Listen -EA SilentlyConti
     api = $h.status; api_pid = $listener.OwningProcess
     cdp = [bool](Get-NetTCPConnection -LocalPort 9222 -State Listen -EA SilentlyContinue)
     skills = (Get-ChildItem "$service\src\epic_adapter\skills" -Directory).Name -join ','
-    assets = (Get-ChildItem 'C:\Users\demoadmin\Desktop\assets' -File).Name -join ','
+    emr = try { (Invoke-RestMethod 'http://127.0.0.1:8001/healthz' -TimeoutSec 2).status } catch { 'down' }
 } | ConvertTo-Json -Compress

@@ -21,11 +21,11 @@ class TesterBrowserTests(unittest.TestCase):
 
         config = Settings.from_env()
         bundle = ClinicalBundle(
-            patient_id="DEMO-100042",
+            patient_id="TUS-2026-0417",
             resources=FixtureEpicAdapter(config.fixture_root).retrieve(
-                "DEMO-100042", [ResourceType.observations, ResourceType.ecg],
+                "TUS-2026-0417", [ResourceType.observations, ResourceType.ecg],
             ),
-            files=FileCatalog((config.fixture_root / "files",)).find("DEMO-100042"),
+            files=FileCatalog((config.fixture_root / "files",)).find("TUS-2026-0417"),
         )
         requests = []
         downloads = []
@@ -88,21 +88,29 @@ class TesterBrowserTests(unittest.TestCase):
                     )
                     page.locator("#url").fill(f"http://127.0.0.1:{upstream.server_port}")
                     page.locator("#bearer").fill("synthetic-test-token")
-                    page.locator("#browserScenario").click()
-                    expect(page.locator("#skillName")).to_have_text("epic-browser")
-                    expect(page.locator("#skillText")).to_contain_text(
-                        "Epic Mijn Dossier"
+                    page.locator("#emrScenario").click()
+                    expect(page.locator("#skillName")).to_have_text("emr-browser")
+                    expect(page.locator("#skillText")).to_contain_text("Clinician EMR")
+                    expect(page.locator("#emrScenario")).to_be_disabled()
+                    self.assertTrue(status_seen.wait(8))
+                    expect(page.locator("#ask")).to_have_value(
+                        "Retrieve all relevant medical information for patient Anna Ricci."
                     )
-                    self.assertTrue(status_seen.wait(5))
                     page.wait_for_timeout(1200)
-                    expect(page.locator("#browserScenario")).to_be_disabled()
-                    expect(page.locator("#fileScenario")).to_be_disabled()
+                    expect(page.locator("#emrScenario")).to_be_disabled()
+                    expect(page.locator("#pacsScenario")).to_be_disabled()
                     expect(page.locator("#sqlScenario")).to_be_disabled()
                     self.assertNotIn("observation_codes", requests[-1])
                     self.assertTrue(requests[-1]["bypass_cache"])
+                    self.assertEqual("TUS-2026-0417", requests[-1]["patient_id"])
+                    self.assertEqual(
+                        "Retrieve all relevant medical information for patient Anna Ricci.",
+                        requests[-1]["instruction"],
+                    )
                     page.locator("#cancel").click()
                     expect(page.locator("#state")).to_have_text("Cancelled")
-                    expect(page.locator("#browserScenario")).to_be_enabled()
+                    expect(page.locator("#emrScenario")).to_be_enabled()
+                    expect(page.locator("#handover")).to_be_hidden()
 
                     queued.clear()
                     page.locator("#codes").fill("")
@@ -112,11 +120,16 @@ class TesterBrowserTests(unittest.TestCase):
                     expect(page.locator("#output")).to_contain_text('"resourceType": "Bundle"')
                     expect(page.locator("#output")).to_contain_text('"value": 120')
                     expect(page.locator("#meta")).to_contain_text('"cache_status": "bypass"')
+                    expect(page.locator("#handover")).to_contain_text(
+                        "MDT dashboard, UMC Utrecht, as FHIR R4 JSON"
+                    )
+                    page.locator("#source").select_option("pacs")
+                    expect(page.locator("#skillName")).to_have_text("pacs-viewer")
 
                     page.locator("#source").select_option("files")
                     expect(page.locator("#skillName")).to_have_text("local-files")
                     expect(page.locator("#skillText")).to_contain_text(
-                        "Desktop assets"
+                        "Approved local files"
                     )
                     page.locator("#resources").select_option(["ecg"])
                     page.locator("#format").select_option("json")
@@ -128,6 +141,7 @@ class TesterBrowserTests(unittest.TestCase):
                         page.locator("#files a").click()
                     self.assertEqual(Path(bundle.files[0].path).read_bytes(), Path(download.value.path()).read_bytes())
                     self.assertEqual(1, len(downloads))
+                    expect(page.locator("#handover")).to_contain_text("as Normalized JSON")
                     page.locator("#clear").click()
                     expect(page.locator("#bearer")).to_have_value("")
                     expect(page.locator("#url")).to_have_value("")

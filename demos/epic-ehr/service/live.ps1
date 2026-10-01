@@ -26,7 +26,7 @@ $missing = @($required | Where-Object {
     -not $values.ContainsKey($_) -or [string]::IsNullOrWhiteSpace($values[$_])
 })
 if ($missing.Count) {
-    throw 'Complete the Epic configuration first: ' + ($missing -join ', ')
+    throw 'Complete the EMR agent configuration first: ' + ($missing -join ', ')
 }
 if ($values.EPIC_BACKEND -notin @('copilot', 'computer-use')) {
     throw 'EPIC_BACKEND must be copilot for the live demo.'
@@ -44,15 +44,19 @@ foreach ($item in $values.GetEnumerator()) {
 }
 $env:EPIC_ENV_FILE = $envFile
 $portal = $null
-if ($values.EPIC_SYNTHETIC_PORTAL -eq '1') {
+$emrRunning = $false
+try {
+   $emrRunning = (Invoke-RestMethod 'http://127.0.0.1:8001/healthz' -TimeoutSec 2).status -eq 'ok'
+} catch {}
+if ($values.EPIC_SYNTHETIC_PORTAL -eq '1' -and -not $emrRunning) {
    $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
    $portal = Start-Process -FilePath $python -ArgumentList @(
-       '-m', 'epic_adapter.synthetic_portal', '--port', '8001'
+       '-m', 'epic_adapter.synthetic_emr', '--port', '8001'
    ) -WorkingDirectory $PSScriptRoot -PassThru -WindowStyle Hidden
    $deadline = [DateTime]::UtcNow.AddSeconds(30)
    do {
        if ($portal.HasExited) {
-           throw 'The synthetic Epic portal exited before readiness.'
+           throw 'The synthetic EMR exited before readiness.'
        }
        try {
            $portalHealth = Invoke-RestMethod 'http://127.0.0.1:8001/healthz' `
@@ -63,7 +67,7 @@ if ($values.EPIC_SYNTHETIC_PORTAL -eq '1') {
        if ($portalHealth.status -ne 'ok') { Start-Sleep -Milliseconds 500 }
    } while ($portalHealth.status -ne 'ok' -and [DateTime]::UtcNow -lt $deadline)
    if ($portalHealth.status -ne 'ok') {
-       throw 'The synthetic Epic portal did not become healthy.'
+       throw 'The synthetic EMR did not become healthy.'
    }
 }
 $browserArguments = @(
@@ -78,7 +82,7 @@ if ($values.EPIC_SYNTHETIC_PORTAL -eq '1') {
 Start-Process powershell.exe -ArgumentList $browserArguments `
    -WorkingDirectory $PSScriptRoot | Out-Null
 
-Write-Host 'Dedicated Epic browser opened. Log in manually and keep exactly one Epic tab open.'
+Write-Host 'Dedicated clinical workstation browser opened. Keep exactly one EMR tab open.'
 Write-Host 'The stable authenticated demo tunnel starts separately and forwards this local API.'
 try {
    & (Join-Path $PSScriptRoot 'run.ps1') -Port $Port -KeepAlive:$KeepAlive

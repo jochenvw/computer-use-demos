@@ -28,11 +28,18 @@ class ComputerUseEpicAdapter:
         )
 
     def retrieve(
-        self, patient_id: str, resources: list[ResourceType],
+        self, patient_id: str, resources: list[ResourceType], **request,
     ) -> list[ClinicalResource]:
-        return self.runner.retrieve("epic-browser", patient_id, resources).resources
+        return self.runner.retrieve(
+            "emr-browser", patient_id, resources, **request,
+        ).resources
+
+    def retrieve_pacs(
+        self, patient_id: str, resources: list[ResourceType], **request,
+    ) -> ClinicalBundle:
+        return self.runner.retrieve("pacs-viewer", patient_id, resources, **request)
 
     def retrieve_sql(
-        self, patient_id: str, resources: list[ResourceType],
+        self, patient_id: str, resources: list[ResourceType], **request,
     ) -> ClinicalBundle:
-        return self.runner.retrieve("sql-desktop", patient_id, resources)
+        return self.runner.retrieve("sql-desktop", patient_id, resources, **request)

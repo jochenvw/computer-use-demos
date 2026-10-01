@@ -1,90 +1,107 @@
-# Clinical Data Agent – computer use for healthcare
+# Data Retrieval Agent - Ospedale di Montalcino
+
+**Retrieves patient data from any system on this workstation, maps it to the
+requested data standard, and shares it with the requesting hospital.**
 
 An AI agent that **uses a hospital workstation the way a person does**: it looks
 at the screen, clicks, types, and reads. It then returns what it found as
 structured data in the format you choose.
 
-> Independent training demo with **synthetic patients only**. Not an Epic Systems
-> product, not a medical device, and not for clinical decisions.
+> **No real or personal patient data is used anywhere in this demo.** Every
+> patient, value, report and image is synthetic. The single demo patient is
+> *Anna Ricci* (F, born 1971-03-14, ID `TUS-2026-0417`). "Ospedale di
+> Montalcino", "SanitaCartella" and "MontalcinoPACS" are invented. Not a
+> product of any EMR vendor, not a medical device, not for clinical decisions.
 
 ## For clinicians: what this shows
 
-### The problem
-
-Clinical data is spread across systems that were never designed to share it:
-- **EHR portals:** Epic or other electronic health record (EHR) portals, used through a browser.
-- **Files:** ECG printouts and scanned reports saved in folders.
-- **Local databases:** accessed with desktop tools, in the local language.
-
-Integration projects (APIs, HL7 interfaces) take months per system. Meanwhile,
-staff re-type values between screens.
-
-### The idea
-
-Give an AI agent the same screen, mouse, and keyboard a staff member has. You ask
-for data ("labs for patient X"). The agent opens the right application, finds the
-data, reads it, and hands it over in a standard format:
-- **FHIR:** Fast Healthcare Interoperability Resources, the HL7 exchange standard.
-- **OMOP:** the Observational Medical Outcomes Partnership common data model, used for research.
-- **Your own schema or ontology,** in any language.
-
-No integration project and no change to the source system.
-
 ### The story (voice-over)
 
-1. A patient on holiday (Italian or Dutch) is admitted to a hospital in Italy.
-2. They are transferred to the Netherlands.
-3. The Dutch multidisciplinary team (MDT) needs the Italian record to agree on treatment.
-4. **Before:** the Italian hospital must build database mappers that emit FHIR, OMOP or similar.
-5. **With the agent:** that no longer matters. It picks up scans, crawls
-   databases, uses apps on screen, and emits whatever output format the MDT asks for.
+1. Anna Ricci collapses on holiday in Tuscany and is admitted to Ospedale di
+   Montalcino on 2026-09-18.
+2. She is transferred to UMC Utrecht.
+3. The Dutch multidisciplinary team (MDT) needs her Italian record to agree on
+   treatment.
+4. **Before:** connecting that hospital to the federated infrastructure means a
+   months-long integration project: database mappers that emit FHIR or OMOP,
+   for a hospital with five IT staff and a cheap, old, non-standard EMR.
+5. **With the agent:** it is deployed inside the Italian hospital and simply
+   asked for the data. It is never told where the data is.
 
-The demo VM plays the Italian hospital. Both UIs (the tester's case strip and
-pipeline, and the agent console header) use this narrative.
+The demo VM plays Ospedale di Montalcino. Both UIs (test page and agent console)
+use this narrative.
+
+### Where clinical data lives
+
+| Source | Meaning | In the demo |
+|---|---|---|
+| **EMR** | Electronic medical record: the clinician workstation | *SanitaCartella 4.2*, Italian UI, dated style, worklist of synthetic patients, Oncology and Surgery views, Labs / Imaging / Notes tabs |
+| **PACS** | Picture archiving and communication system: imaging reports and images | *MontalcinoPACS Web 2.1*, opened from the EMR imaging tab: signed report + synthetic MRI series |
+| **Local database** | Research or departmental database, own schema | `OncologiaDemo` on SQL Server, Italian column names, opened in SSMS |
+
+### The visible instruction
+
+Every scenario sends the same typed instruction, visible on the test page and
+printed in full in the agent console before the run:
+
+> Retrieve all relevant medical information for patient Anna Ricci.
+
+It names no system, file path, table or menu. The agent discovers them. Scenario
+buttons only choose which source to demonstrate and which resource types the
+request contract asks for (for example `imaging`); that is the API contract, not
+a navigation hint. Per-system navigation hints exist only as an operator
+fallback (`EPIC_NAVIGATION_HINTS=1`, off by default) and are never shown.
 
 ### The three scenarios
 
-| # | Source | What the agent does | Returns | Time |
+| # | Scenario | What the agent does | Returns | Time |
 |---|---|---|---|---|
-| 1 | **Hospital patient portal** (Epic MyChart / Mijn Dossier, browser) | Opens the logged-in portal, goes to *Uitslagen* (results), reads the latest lab results | Lab observations with values, units, dates | ~1 min (portal-dependent) |
-| 2 | **Scanned ECG** (image file on the desktop) | Opens the `assets` folder, opens `ecg.jpg`, reads what is **printed** on it | ECG report + one observation per printed value: rate, PR, QRS, QT, QTc, axes, printed statements | ~30–60 s |
-| 3 | **Italian oncology database** (SQL Server Management Studio) | Writes and runs read-only queries on an Italian-language schema (`paziente`, `esame_laboratorio`) | Patient + recent labs (e.g., *Emoglobina*, *Creatinina*, CEA), translated into FHIR/OMOP | ~1 min |
+| 1 | **Clinical data from the EMR** | Finds Anna in the SanitaCartella worklist, opens the chart, reads labs, notes and the admission | Patient, encounter, labs (Emoglobina, CEA, CA 19-9, ...), clinical notes | ~1-2 min (rehearse) |
+| 2 | **Medical imaging from PACS** | Opens the imaging tab, follows the link into MontalcinoPACS, reads the signed MRI report next to the image | DiagnosticReport per study, marked *preliminary* | ~1 min (rehearse) |
+| 3 | **Local Italian database** (unknown schema, Italian column names), already on the VM | Explores `INFORMATION_SCHEMA` in SSMS, writes read-only queries | Patient + labs, translated to FHIR/OMOP | ~1 min |
 
-You can switch the output after the run: **FHIR**, **OMOP**, JSON, HL7 v2, or a
-**custom schema**. A Dutch example is prefilled. The results are mapped again
-without repeating the computer work.
+Fallback (API / advanced only): **ECG file on this workstation** (`source:
+files`), a synthetic ECG summary for Anna.
+
+After each run the closing line reads: *Handing over to the MDT dashboard, UMC
+Utrecht, in the requested standard: FHIR, OMOP or a custom schema.* Output can
+then be switched without repeating the computer work: **FHIR**, **OMOP**, JSON,
+HL7 v2, or a **custom schema** (a Dutch example is prefilled).
 
 ### What you see during the demo
 
-1. **The workstation (remote desktop).** Windows open and the mouse moves; in the
-   browser, red rings mark each click. SQL is typed into SSMS. Afterwards the
-   agent closes everything it opened.
-2. **The agent console** (Windows Terminal, "HEALTH REWIRED MUNICH 2026" block
-   title). It shows the same three acts as the tester (1 · ASK → 2 · WATCH →
-   3 · RECEIVE) and a plain-language running commentary:
-   - `REQUEST`: what was asked.
+1. **The workstation (remote desktop).** The EMR and PACS in Edge, SSMS for the
+   database. Red rings mark each browser click. Afterwards the agent closes what
+   it opened.
+2. **The agent console** (Windows Terminal), headed *Data Retrieval Agent -
+   Ospedale di Montalcino* with its one-line capability. It shows 1 - ASK ->
+   2 - WATCH -> 3 - RECEIVE and a plain-language log:
+   - `TASK`: the full instruction, before the run starts.
+   - `REQUEST`: which source and resources.
    - `ACTION`: what it is doing on screen.
    - `QUERY`: the exact SQL it ran.
    - `THINKING`: a short summary of the model's reasoning.
    - `FOUND`: each value it extracted.
-   - `[DONE]`: total time.
-3. **The test page** (browser). Scenario buttons, a live timeline with a spinner,
-   a *What was found* summary in readable form, and the formatted output.
+   - `DONE` then `HANDOVER`: hand-off to the MDT dashboard in Utrecht.
+3. **The test page** (browser). The instruction typed into a visible input,
+   scenario buttons 1 / 2 / 3, a live timeline, a *What was found* summary, the
+   formatted output and the handover line.
 
 ### Safety boundaries built in
 
-- **Reads, does not interpret.** For the ECG, the agent copies only what is
-  printed or plainly visible (for example "Printed on ECG: Rate 63; PR 176 …").
-  It adds no diagnosis of its own. ECG items are marked *preliminary:
-  transcribed by AI, verify against source*.
+- **Reads, does not interpret.** For imaging, the agent copies only what is
+  printed in the signed report or plainly visible. It adds no diagnosis of its
+  own. Imaging and ECG items end with *Preliminary: transcribed by AI, verify
+  against source.*
 - **Verified or nothing.** Every value must come from a screen or file the agent
   actually opened. It checks the patient identity, and it stops with a clear
-  reason (such as "portal session expired – log in again") rather than guess.
+  reason (such as "the EMR session has expired - please sign in again") rather
+  than guess.
 - **Narrow permissions.**
   - Each scenario gets only its own tools.
   - SQL must be read-only (`SELECT`) and limited to the demo database.
-  - The browser stays on one approved site and may type only the requested
-    patient ID.
+  - The browser stays on one approved site (origin allow-list) and may type
+    only the requested patient name or ID.
 - **Read-only accounts still required.** The instructions to the AI are not a
   security control. The source system's account must itself be read-only.
 - **Synthetic data only.** The model runs in Azure AI Foundry (GlobalStandard
@@ -94,11 +111,13 @@ without repeating the computer work.
 
 ### Honest limitations
 
-- **Speed:** a model looking at screens takes 30–70 s per request. Code written
+- **Speed:** a model looking at screens takes 30-120 s per request. Code written
   for one system would be faster, but the agent adapts to a German or Italian
   system without new code.
 - **Accuracy:** screen and image reading can err. The output is a draft for
   human verification, not a final record.
+- **Imaging:** the PACS viewer is a simple local viewer showing a synthetic
+  (generated) MRI phantom, not a diagnostic DICOM viewer.
 - **Throughput:** one request at a time on one workstation. This is a
   demonstration, not a production interface engine.
 
@@ -143,9 +162,10 @@ jobs, and 128 total jobs per session. Restarting clears jobs and results.
 ```powershell
 $headers = @{ Authorization = "Bearer $env:API_BEARER_TOKEN" }
 $body = @{
-    patient_id = 'DEMO-100042'
-    source = 'files' # files, ehr, or both
-    resources = @('patient', 'ecg', 'documents')
+    patient_id = 'TUS-2026-0417'
+    instruction = 'Retrieve all relevant medical information for patient Anna Ricci.'
+    source = 'ehr' # ehr, pacs, sql, files, or both
+    resources = @('patient', 'observations', 'documents')
 } | ConvertTo-Json
 $job = Invoke-RestMethod http://127.0.0.1:8000/v1/retrieval-jobs `
     -Method Post -Headers $headers -ContentType application/json -Body $body
@@ -159,12 +179,19 @@ do not assume a second shell inherited the file.
 
 | Source | Operation |
 |---|---|
-| `files` | Fixture: local catalog. Copilot: local-file skill lists/opens approved reports; no EHR lookup |
-| `ehr` | Fixture or Copilot Epic-browser skill; no local-file discovery |
-| `both` | Both sources; a failure prevents a success-shaped partial result |
+| `ehr` | Scenario 1. Fixture or Copilot `emr-browser` skill on the clinician EMR |
+| `pacs` | Scenario 2. Fixture (offline) or Copilot `pacs-viewer` skill; imaging reports marked preliminary |
+| `sql` | Scenario 3. Fixture (offline) or Copilot `sql-desktop` skill in SSMS, read-only |
+| `files` | ECG fallback. Fixture: local catalog. Copilot: `local-files` skill lists/opens approved files |
+| `both` | EMR + files; a failure prevents a success-shaped partial result |
+
+`instruction` (optional, max 200 characters, letters/digits/basic punctuation)
+is the visible task; it is shown as the first `task` timeline item and passed to
+the agent. A `patient_name` is read from "...for patient <name>." or the
+explicit `patient_name` field; the browser may type only that name or the ID.
 
 Store approved files under **exact patient directories**, for example
-`D:\DemoRecords\DEMO-100042\ecg.pdf`. Configure `EPIC_FILE_ROOTS=D:\DemoRecords`.
+`D:\DemoRecords\TUS-2026-0417\ecg.pdf`. Configure `EPIC_FILE_ROOTS=D:\DemoRecords`.
 Multiple Windows roots are separated by semicolons. Substring matches across
 patient IDs are not allowed. Missing roots and escaped links fail explicitly.
 
@@ -178,8 +205,11 @@ DICOM/SCP-ECG remain original downloads. No waveform conversion or diagnosis.
 ## Copilot CLI skills mode
 
 The Python agent hosts **GitHub Copilot CLI through `github-copilot-sdk==1.0.13`**.
-Three packaged `SKILL.md` modules implement `epic-browser`, `local-files`, and
-`sql-desktop`.
+Four packaged, system-agnostic `SKILL.md` modules implement `emr-browser`,
+`pacs-viewer`, `sql-desktop`, and `local-files`. They describe how to operate a
+kind of system, never where Anna's data is. `EPIC_NAVIGATION_HINTS=1` adds
+short per-system hints to the agent prompt (operator fallback, default off;
+never shown in the visible instruction).
 Each request gets an isolated empty-mode CLI session with only the selected
 skill eagerly loaded and that skill's host tools. Generic shell, filesystem,
 network, built-in skills, plugins, and configuration discovery are not enabled.
@@ -225,28 +255,41 @@ It does not establish compatibility with the plant agent's native
 `computer_use_preview` tool, and no such model deployment was found in this
 account. Keep that agent's model selection separate.
 
+Demo target: the loopback synthetic EMR + PACS (`python -m
+epic_adapter.synthetic_emr --port 8001`; `live.ps1` starts it when
+`EPIC_SYNTHETIC_PORTAL=1`, and `infra\apply-changed-files.ps1` registers it as
+the `EpicDemoEmr` task). It binds to `127.0.0.1` only. Internal identifiers keep
+the legacy `epic`/`EPIC_` prefix so the VM, launcher and release tags keep working.
+
 1. On the VM, open a **dedicated** browser profile:
 
    ```powershell
-   .\browser.ps1 -EpicUrl https://your-authorized-epic-host
+   .\browser.ps1 -EpicUrl http://127.0.0.1:8001/ -AllowLoopbackTraining
    ```
 
-2. Log in manually using an authorized **read-only account**, preferably in Epic
-   training with synthetic records. Keep exactly one Epic tab open.
-3. Configure `.env` (replace placeholders):
+2. Keep exactly one EMR tab open on the SanitaCartella worklist. For a real
+   EMR, sign in manually with an authorized **read-only account**.
+3. Configure `.env`:
 
    ```text
    EPIC_BACKEND=copilot
    EPIC_COMPUTER_USE_ENABLED=1
-   EPIC_ORIGIN=https://your-authorized-epic-host
-   EPIC_READY_URL_PREFIX=https://your-authorized-epic-host/chart
+   EPIC_SYNTHETIC_PORTAL=1
+   EPIC_ORIGIN=http://127.0.0.1:8001
+   EPIC_READY_URL_PREFIX=http://127.0.0.1:8001/
+   EPIC_BROWSER_WINDOW_TITLE=Ospedale di Montalcino - Postazione clinica
    EPIC_BROWSER_CDP_URL=http://127.0.0.1:9222
    MODEL_DEPLOYMENT=gpt-6-astra
+   # Operator fallback only, default off:
+   # EPIC_NAVIGATION_HINTS=1
    ```
+
+   An `http://` origin is accepted only for loopback in synthetic EMR mode; any
+   other origin must be HTTPS and exact.
 
 4. Set the runtime credential locally, or use Entra ID for optional Azure BYOM.
    Start `.\run.ps1`. `computer-use` remains an alias for `copilot`.
-5. Submit an `ehr` or `both` request. No special caller-side automation is needed.
+5. Submit an `ehr`, `pacs` or `both` request. No special caller-side automation is needed.
 
 The worker attaches over the browser's loopback Chrome DevTools Protocol (CDP).
 It only captures the configured-origin tab, rejects cross-origin navigation,
@@ -276,7 +319,7 @@ Warm blood pressure before the demo using a normal request:
 
 ```json
 {
-  "patient_id": "DEMO-100042",
+  "patient_id": "TUS-2026-0417",
   "source": "ehr",
   "resources": ["observations"],
   "observation_codes": ["85354-9"],
@@ -294,8 +337,8 @@ Job status exposes `cache_status` (`hit`, `miss`, `bypass`), `collected_at` and
 Oversized bundles are returned but not cached (`expires_at == collected_at`).
 
 **Read-only intent is not an authorization boundary.** Model instructions and
-tool restrictions cannot guarantee that every clicked Epic control is read-only.
-The Epic account must enforce read-only permissions. Browser debugging grants
+tool restrictions cannot guarantee that every clicked EMR control is read-only.
+The EMR account must enforce read-only permissions. Browser debugging grants
 access to its session: never tunnel port 9222, reuse your everyday browser
 profile, or run alongside confidential tabs. Test hospital-specific navigation
 with synthetic records before any approved clinical deployment.
@@ -348,7 +391,7 @@ multi-user or patient-level authorization.
 ## Local testing UI and VM startup
 
 On the Windows VM, RDP through Bastion, manually sign in to the dedicated
-authorized Epic browser, then start the API and its authenticated tunnel as one
+authorized EMR browser, then start the API and its authenticated tunnel as one
 owned process:
 
 ```powershell
@@ -403,8 +446,8 @@ It starts the VM, obtains fresh `host` and `connect` tokens through the locally
 signed-in Dev Tunnel CLI, stores them with Windows Data Protection API (DPAPI),
 updates the VM host task through protected Run Command parameters, opens the
 Bastion RDP connection, and starts the preconfigured local tester. It never
-prints either token. In RDP, double-click **Epic Live Demo** and complete the
-manual read-only Epic login. The visible agent and browser remain in the RDP
+prints either token. In RDP, double-click **Epic Live Demo** (legacy shortcut name); it starts the
+synthetic EMR and opens it in the dedicated Edge window. The visible agent and browser remain in the RDP
 session.
 
 `infra\enable-demo-mode.ps1` remains available when the VM and RDP session are
@@ -412,18 +455,32 @@ already running and only the protected tunnel credentials/shortcut need refresh.
 
 ## Three-scenario demo runbook
 
+Same visible instruction for all three: *Retrieve all relevant medical
+information for patient Anna Ricci.*
+
 | # | Button | Skill | What the agent does | Typical time |
 |---|---|---|---|---|
-| 1 | Browser EHR | `epic-browser` | Navigates the logged-in Mijn Dossier session → Uitslagen, reads 5 results | depends on portal |
-| 2 | Local clinical files | `local-files` | Lists Desktop `assets`, opens `ecg.jpg`, transcribes only printed/visible data (rate, PR, QRS, QT/QTc, axes, printed statements, speed/gain) → DiagnosticReport + one Observation per measurement | ~30 s |
-| 3 | Italian SSMS | `sql-desktop` | Opens SSMS on `OncologiaDemo`, writes 2 read-only queries on the Italian schema → Patient + 8 labs | ~55 s |
+| 1 | Clinical data from the EMR | `emr-browser` | Finds Anna in the SanitaCartella worklist, opens the chart (Oncologia / Chirurgia view), reads labs, notes, admission | rehearse; target < 2 min |
+| 2 | Medical imaging from PACS | `pacs-viewer` | Opens the Imaging tab, follows the link into MontalcinoPACS, reads the signed MRI report next to the synthetic image -> DiagnosticReport marked preliminary | rehearse; target ~1 min |
+| 3 | Local Italian database | `sql-desktop` | Opens SSMS, explores `INFORMATION_SCHEMA`, writes read-only queries on the Italian schema -> Patient + labs | ~1 min |
+| - | ECG fallback (API / Details) | `local-files` | Opens the synthetic ECG summary in the approved file roots, transcribes printed values only | ~30 s |
 
 Before the demo:
 
-1. `start-demo.ps1`, then log in to Mijn Dossier in the VM's Edge **just before**
-   running scenario 1 (MyChart logs out after ~20 min idle; the agent then stops
-   with `session_expired` and the UI says to log in again).
-2. Keep the RDP window **restored**. A minimized RDP client stops drawing and
+1. Seed Anna into the VM's existing `OncologiaDemo` database (once; idempotent).
+   Copy `infra\seed-anna-oncologia.sql` to the VM, then:
+
+   ```powershell
+   sqlcmd -S localhost -E -d OncologiaDemo -b -i .\seed-anna-oncologia.sql
+   ```
+
+2. Delete leftover real/personal material on the VM: the old Desktop `assets`
+   folder (ECG image), any screenshots under `service\diagnostics`, and the
+   browsing history of the dedicated Edge profile.
+3. `start-demo.ps1`, then in RDP check that Edge shows the SanitaCartella
+   worklist. Rehearse scenario 1 and 2 with hints **off**; if the agent gets lost
+   on the day, set `EPIC_NAVIGATION_HINTS=1` (invisible to the audience).
+4. Keep the RDP window **restored**. A minimized RDP client stops drawing and
    ignores keyboard input, so SSMS reports `rdp_minimized`. The local registry
    value `HKCU\Software\Microsoft\Terminal Server Client\RemoteDesktop_SuppressWhenMinimized=2`
    (set once; applies to new RDP connections) keeps a minimized session live.
@@ -431,23 +488,25 @@ Before the demo:
    `infra\keep-session-alive.ps1` to move the session to the VM console
    (`tscon`) so it keeps rendering without any RDP client. Reconnecting RDP
    takes it back.
-3. Output: pick FHIR, OMOP, JSON, … or **Custom schema / ontology** (paste any
+5. Output: pick FHIR, OMOP, JSON, ... or **Custom schema / ontology** (paste any
    JSON schema, example, or description; a Dutch example is prefilled).
    **Show last result in this format** re-renders the same job without rerunning
    computer use.
 
 What the audience sees:
 
-- **VM console window** (Rich TUI in Windows Terminal): big "HEALTH REWIRED
-  MUNICH 2026" title, the ASK → WATCH → RECEIVE acts with live status, plus a
-  scrolling log in plain clinical language (`REQUEST`, `ACTION`, `QUERY`,
-  `THINKING`, `FOUND`, `DONE`). `THINKING` lines are
-  the model's reasoning summaries (`EPIC_REASONING_SUMMARY`=`none|concise|detailed`,
-  default `concise`). `EPIC_TUI=0` falls back to plain log lines.
-- **Test UI**: the same lines as a live timeline (job status field `timeline`),
-  a "What was found" summary, and the formatted output.
-- Each skill closes what it opened (SSMS, the `assets` folder, the ECG viewer),
-  so the desktop is clean for the next scenario.
+- **VM console window** (Rich TUI in Windows Terminal): header *Data Retrieval
+  Agent - Ospedale di Montalcino* plus its capability line, the ASK -> WATCH ->
+  RECEIVE acts with live status, plus a scrolling log in plain clinical language
+  (`TASK`, `REQUEST`, `ACTION`, `QUERY`, `THINKING`, `FOUND`, `DONE`,
+  `HANDOVER`). `THINKING` lines are the model's reasoning summaries
+  (`EPIC_REASONING_SUMMARY`=`none|concise|detailed`, default `concise`).
+  `EPIC_TUI=0` falls back to plain log lines.
+- **Test UI**: the instruction typed into a visible input, the same lines as a
+  live timeline (job status field `timeline`), a "What was found" summary, the
+  formatted output and the MDT handover line.
+- Each skill closes what it opened (SSMS, PACS viewer tab, file viewer), so the
+  desktop is clean for the next scenario.
 
 Operational notes:
 
@@ -470,8 +529,8 @@ cd .\demos\epic-ehr\infra
 ```
 
 `run-scenario.ps1` prints the readable timeline, the result, the per-step agent trace, and downloads
-screenshots to `.azure\<rg>\diagnostics\<run>` (gitignored; may contain real
-portal screenshots).
+screenshots to `.azure\<rg>\diagnostics\<run>` (gitignored). Scenarios: `emr`
+(default), `pacs`, `sql`, `files`; all send Anna's visible instruction.
 
 ## Versioned release and desktop launcher
 
@@ -510,7 +569,7 @@ Running an installed version does not contact GitHub.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/v1/retrieval-jobs` | Patient-scoped retrieval (`files`, `ehr`, `both`) |
+| POST | `/v1/retrieval-jobs` | Patient-scoped retrieval (`ehr`, `pacs`, `sql`, `files`, `both`) |
 | GET | `/v1/retrieval-jobs/{job_id}` | Job status, no clinical result |
 | GET | `/v1/retrieval-jobs/{job_id}/result` | Default: FHIR JSON |
 | GET | `/v1/retrieval-jobs/{job_id}/result?format=json` | Normalized JSON |
@@ -530,7 +589,7 @@ FHIR output preserves recorded quantities/components; it is an illustrative
 mapping, not validated FHIR profile conformance. NDJSON contains clinical
 resources; file links are in JSON/FHIR. Source provenance is included in normalized
 JSON. The caller need not know or orchestrate computer use, but provenance is not
-misrepresented as a native Epic API response.
+misrepresented as a native EMR API response.
 
 XML supports an explicit R4 subset, not arbitrary narrative/extensions.
 HL7 preserves supported numeric/text observations, BP component codes/units and
@@ -545,7 +604,7 @@ uv run --frozen --extra test python -m unittest discover tests -v
 uv run --frozen epic-agent --banner-only
 ```
 
-Unit/API tests use fixtures and mocked model calls; they do not contact Epic or
+Unit/API tests use fixtures and mocked model calls; they do not contact an EMR or
 Azure. Infrastructure template and image preparation are in `infra\`.
 
 ## Dependency maintenance

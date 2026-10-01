@@ -22,7 +22,7 @@ class JobRoutingTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        patient = root / "DEMO-100042"
+        patient = root / "TUS-2026-0417"
         patient.mkdir()
         (patient / "ecg.xml").write_text("synthetic")
         self.adapter = Mock()
@@ -30,7 +30,7 @@ class JobRoutingTests(unittest.TestCase):
         self.catalog = Mock(wraps=FileCatalog((root,)))
         self.jobs = JobService(self.adapter, self.catalog, AuditWriter(root / "audit.jsonl"))
         job = self.jobs.create(RetrievalRequest(
-            patient_id="DEMO-100042", source=source,
+            patient_id="TUS-2026-0417", source=source,
         ), "test")
         for _ in range(100):
             if job.status in {"complete", "failed"}:
@@ -55,13 +55,65 @@ class JobRoutingTests(unittest.TestCase):
         self.adapter.retrieve.assert_called_once()
         self.catalog.find.assert_called_once()
 
+    def wait(self, job):
+        for _ in range(200):
+            if job.status in {"complete", "failed"}:
+                break
+            time.sleep(0.01)
+        return job
+
+    def test_pacs_routes_only_to_pacs_retriever_with_instruction(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        adapter, catalog, database = Mock(), Mock(), Mock()
+        pacs = Mock(return_value=ClinicalBundle(patient_id="TUS-2026-0417", resources=[], files=[]))
+        jobs = JobService(adapter, catalog, AuditWriter(Path(directory.name) / "audit.jsonl"),
+                          database_retriever=database, pacs_retriever=pacs)
+        job = self.wait(jobs.create(RetrievalRequest(
+            patient_id="TUS-2026-0417", source="pacs", resources=["imaging"],
+            instruction="Retrieve all relevant medical information for patient Anna Ricci.",
+        ), "test"))
+        self.assertEqual("complete", job.status)
+        pacs.assert_called_once_with(
+            "TUS-2026-0417", [ResourceType.imaging],
+            instruction="Retrieve all relevant medical information for patient Anna Ricci.",
+            patient_name="Anna Ricci",
+        )
+        adapter.retrieve.assert_not_called()
+        database.assert_not_called()
+        catalog.find.assert_not_called()
+        self.assertEqual(["task", "start"], [e["kind"] for e in job.timeline[:2]])
+        self.assertEqual("handover", job.timeline[-1]["kind"])
+
+    def test_pacs_without_retriever_fails_closed(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        jobs = JobService(Mock(), Mock(), AuditWriter(Path(directory.name) / "audit.jsonl"))
+        job = self.wait(jobs.create(RetrievalRequest(
+            patient_id="TUS-2026-0417", source="pacs", resources=["imaging"],
+        ), "test"))
+        self.assertEqual("failed", job.status)
+        self.assertEqual("error", job.timeline[-1]["kind"])
+
+    def test_display_name_comes_from_instruction_or_explicit_field(self):
+        request = RetrievalRequest(
+            patient_id="TUS-2026-0417",
+            instruction="Retrieve all relevant medical information for patient Anna Ricci.",
+        )
+        self.assertEqual("Anna Ricci", request.display_name())
+        self.assertEqual("Maria Rossi", RetrievalRequest(
+            patient_id="TUS-2026-0417", patient_name="Maria Rossi",
+            instruction="Retrieve all relevant medical information for patient Anna Ricci.",
+        ).display_name())
+        self.assertIsNone(RetrievalRequest(patient_id="TUS-2026-0417").display_name())
+
     def test_sql_routes_only_to_database_retriever(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
         adapter = Mock()
         database = Mock(return_value=ClinicalBundle(
-            patient_id="DEMO-100042", resources=[], files=[],
+            patient_id="TUS-2026-0417", resources=[], files=[],
         ))
         catalog = Mock()
         jobs = JobService(
@@ -72,7 +124,7 @@ class JobRoutingTests(unittest.TestCase):
         )
 
         job = jobs.create(RetrievalRequest(
-            patient_id="DEMO-100042", source="sql",
+            patient_id="TUS-2026-0417", source="sql",
         ), "test")
         for _ in range(100):
             if job.status in {"complete", "failed"}:
@@ -108,7 +160,7 @@ class JobRoutingTests(unittest.TestCase):
         ]
         jobs = JobService(adapter, Mock(), AuditWriter(root / "audit.jsonl"))
         job = jobs.create(RetrievalRequest(
-            patient_id="DEMO-100042", source="ehr",
+            patient_id="TUS-2026-0417", source="ehr",
             resources=["observations"], observation_codes=["85354-9"],
         ), "test")
         for _ in range(100):
@@ -130,7 +182,7 @@ class JobRoutingTests(unittest.TestCase):
         adapter.retrieve.side_effect = retrieve
         jobs = JobService(adapter, Mock(), AuditWriter(root / "audit.jsonl"))
         job = jobs.create(RetrievalRequest(
-            patient_id="DEMO-100042", source="ehr",
+            patient_id="TUS-2026-0417", source="ehr",
         ), "test")
         for _ in range(100):
             if job.status == "running":
@@ -142,7 +194,7 @@ class JobRoutingTests(unittest.TestCase):
         time.sleep(0.05)
         with self.assertRaises(ServiceDrainingError):
             jobs.create(RetrievalRequest(
-                patient_id="DEMO-100042", source="ehr",
+                patient_id="TUS-2026-0417", source="ehr",
             ), "test")
         release.set()
         thread.join(2)
@@ -164,7 +216,7 @@ class JobRoutingTests(unittest.TestCase):
         adapter.retrieve.side_effect = retrieve
         jobs = JobService(adapter, Mock(), AuditWriter(root / "audit.jsonl"))
         jobs.create(RetrievalRequest(
-            patient_id="DEMO-100042", source="ehr",
+            patient_id="TUS-2026-0417", source="ehr",
         ), "test")
         self.assertFalse(jobs.drain(0.01))
         self.assertTrue(jobs.service_status()["accepting_jobs"])

@@ -25,13 +25,15 @@ from rich.text import Text
 from . import progress
 from .config import Settings
 
-TITLE = "HEALTH REWIRED"
-EVENT = "MUNICH 2026"
-PRODUCT = "CLINICAL DATA AGENT"
-SUBTITLE = ("Admitted in Italy, now in the Netherlands  ->  "
-            "the Italian hospital record for the Dutch MDT")
-BEFORE = "Before: a FHIR / OMOP mapper for every system."
-NOW = "Now: portals, scans and databases read as they are, in any output format."
+TITLE = "RETRIEVAL AGENT"
+EVENT = "MONTALCINO"
+PRODUCT = "DATA RETRIEVAL AGENT - OSPEDALE DI MONTALCINO"
+CAPABILITY = ("Retrieves patient data from any system on this workstation, maps it to the "
+              "requested data standard, and shares it with the requesting hospital.")
+SUBTITLE = ("Anna Ricci (synthetic): admitted in Tuscany, transferred to UMC Utrecht  ->  "
+            "her Italian record for the Dutch MDT")
+BEFORE = "Before: a FHIR / OMOP mapper for every hospital system."
+NOW = "Now: EMR, PACS and local databases read as they are, in any output format."
 
 # MDT Observatory dark tokens, mirrored from the tester UI (see design-language.md).
 INK = "#dbe7f1"
@@ -45,6 +47,7 @@ CHROME = "#0b1a29"
 
 # kind -> (badge, badge style, text style); plain words a clinician can follow.
 STYLES = {
+    "task": (" TASK ", f"bold {CHROME} on {INK}", f"bold {INK}"),
     "start": (" REQUEST ", f"bold {CHROME} on {ACCENT}", f"bold {INK}"),
     "step": (" ACTION ", f"bold {LINK}", INK),
     "query": (" QUERY ", f"bold {WARNING}", WARNING),
@@ -55,6 +58,7 @@ STYLES = {
     "warn": (" NOTE ", f"bold {WARNING}", WARNING),
     "error": (" PROBLEM ", f"bold {CHROME} on {DANGER}", f"bold {DANGER}"),
     "info": (" INFO ", f"bold {MUTED}", MUTED),
+    "handover": (" HANDOVER ", f"bold {CHROME} on {LINK}", f"bold {LINK}"),
 }
 BADGE_WIDTH = 11
 FEED_MIN_ROWS = 8
@@ -65,14 +69,17 @@ _GLYPHS = {
     "C": (".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."),
     "D": ("####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."),
     "E": ("#####", "#....", "#....", "####.", "#....", "#....", "#####"),
+    "G": (".###.", "#...#", "#....", "#.###", "#...#", "#...#", ".###."),
     "H": ("#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"),
     "I": (".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."),
     "L": ("#....", "#....", "#....", "#....", "#....", "#....", "#####"),
     "M": ("#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"),
     "N": ("#...#", "#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#"),
+    "O": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
     "R": ("####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"),
     "T": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."),
     "U": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
+    "V": ("#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."),
     "W": ("#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"),
     "0": (".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."),
     "2": (".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"),
@@ -128,7 +135,11 @@ def title_block(width: int, height: int | None = None) -> RenderableType:
 
 
 def _tagline() -> Text:
-    return Text.assemble((PRODUCT, f"bold {MUTED}"), ("   ", ""), (SUBTITLE, INK))
+    return Text.assemble((PRODUCT, f"bold {ACCENT}"), ("   ", ""), (CAPABILITY, INK))
+
+
+def _story_line() -> Text:
+    return Text(SUBTITLE, style=MUTED)
 
 
 def _shift() -> Text:
@@ -142,7 +153,7 @@ def _info_lines(settings: Settings, port: int) -> Table:
     grid.add_row("Model", settings.model_deployment or "(not configured)")
     grid.add_row("Reasoning", f"{settings.reasoning_effort} effort · "
                  f"{settings.reasoning_summary} thinking summaries")
-    grid.add_row("Skills", "epic-browser · local-files · sql-desktop")
+    grid.add_row("Skills", "emr-browser · pacs-viewer · sql-desktop · local-files")
     grid.add_row("Outputs", "FHIR R4 · OMOP CDM · HL7 · any schema / ontology")
     grid.add_row("API", f"http://127.0.0.1:{port}  (bearer token, loopback only)")
     return grid
@@ -161,6 +172,7 @@ def show_banner(console: Console, settings: Settings, port: int) -> None:
     console.print(title_block(console.width))
     console.print()
     console.print(_tagline())
+    console.print(_story_line())
     console.print(Panel(
         Group(_info_lines(settings, port), Text(), _legend(), Text("Stop: Ctrl+C", style=MUTED)),
         title=PRODUCT, border_style=ACCENT,
@@ -227,14 +239,18 @@ class FeedView:
         text_width = max(options.max_width - 4 - 8 - BADGE_WIDTH - 2, 20)
         chosen: list[RenderableType] = []
         used = 0
-        for stamp, kind, level, message in reversed(list(self.feed.lines)):
-            # A blank line before each new request separates the demo runs.
-            lines = max(len(Text(message).wrap(console, text_width)), 1) + (kind == "start")
+        entries = list(self.feed.lines)
+        for index in range(len(entries) - 1, -1, -1):
+            stamp, kind, level, message = entries[index]
+            # A blank line before each new run (its TASK line, else its REQUEST line).
+            older = entries[index - 1][1] if index else None
+            gap = kind == "task" or (kind == "start" and older != "task")
+            lines = max(len(Text(message).wrap(console, text_width)), 1) + gap
             if used + lines > height:
                 break
             used += lines
             chosen.append(render_line(stamp, kind, level, message))
-            if kind == "start":
+            if gap:
                 chosen.append(Text())
         chosen.reverse()
         body: object = Group(*chosen) if chosen else Text(
@@ -300,6 +316,7 @@ class Header:
         yield title_block(options.max_width, console.height)
         yield Text()
         yield _tagline()
+        yield _story_line()
         yield _shift()
         yield Text()
         yield status_row()
@@ -355,7 +372,7 @@ def tui_supported(console: Console) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Epic retrieval agent and local API")
+    parser = argparse.ArgumentParser(description="Data Retrieval Agent and local API")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--banner-only", action="store_true", help="Preview the terminal banner.")
     parser.add_argument("--tunnel", action="store_true", help="Start the API and an authenticated dev tunnel together.")

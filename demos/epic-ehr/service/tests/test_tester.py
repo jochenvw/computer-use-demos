@@ -35,9 +35,20 @@ class TesterTests(unittest.TestCase):
         self.assertIn("bypass_cache", page)
         self.assertIn("TUNNEL_URL_DEFAULT", page)
         self.assertIn("Uses protected local token when blank", page)
-        self.assertIn("<b>Hospital patient portal</b>", page)
-        self.assertIn("<b>Scanned ECG</b>", page)
-        self.assertIn("<b>Italian oncology database</b>", page)
+        self.assertIn("<b>1 &#xB7; Clinical data from the EMR</b>", page)
+        self.assertIn("<b>2 &#xB7; Medical imaging from PACS</b>", page)
+        self.assertIn("<b>3 &#xB7; Local Italian database</b>", page)
+        self.assertLess(page.index('id="emrScenario"'), page.index('id="pacsScenario"'))
+        self.assertLess(page.index('id="pacsScenario"'), page.index('id="sqlScenario"'))
+        self.assertIn("<title>Data Retrieval Agent - Ospedale di Montalcino</title>", page)
+        self.assertIn("maps it to the requested data standard", page)
+        self.assertIn('"Retrieve all relevant medical information for patient Anna Ricci."', page)
+        self.assertIn('id="ask"', page)
+        self.assertIn('id="handover"', page)
+        self.assertIn("MDT dashboard, UMC Utrecht", page)
+        for banned in ("portal", "Portal", "Epic", "MyChart", "Mijn Dossier", "fax", "Fax",
+                       "SELF", "assets", "Uitslagen"):
+            self.assertNotIn(banned, page)
         self.assertIn('class="case"', page)
         self.assertIn("Record for the Dutch MDT", page)
         self.assertIn("renderTimeline(b.timeline)", page)
@@ -50,8 +61,8 @@ class TesterTests(unittest.TestCase):
         self.assertIn('class="context-banner"', page)
         self.assertNotIn("linear-gradient", page)
         self.assertTrue(page.isascii())
-        self.assertIn('$("browserScenario").onclick', page)
-        self.assertIn('$("fileScenario").onclick', page)
+        self.assertIn('$("emrScenario").onclick', page)
+        self.assertIn('$("pacsScenario").onclick', page)
         self.assertIn('$("sqlScenario").onclick', page)
         self.assertIn('<option value="omop">OMOP CDM JSON</option>', page)
         self.assertIn('$("format").value', page)
@@ -61,11 +72,18 @@ class TesterTests(unittest.TestCase):
     def test_tester_embeds_the_exact_packaged_text_skills(self):
         skills = packaged_skill_instructions()
         self.assertEqual(
-            {"epic-browser", "local-files", "sql-desktop"}, set(skills)
+            {"emr-browser", "pacs-viewer", "local-files", "sql-desktop"}, set(skills)
         )
-        self.assertIn("Epic Mijn Dossier", skills["epic-browser"])
-        self.assertIn("ECG vision", skills["local-files"])
-        self.assertIn("SQL", skills["sql-desktop"])
+        self.assertIn("Clinician EMR", skills["emr-browser"])
+        self.assertIn("Preliminary: transcribed by AI, verify against source.", skills["pacs-viewer"])
+        self.assertIn("INFORMATION_SCHEMA", skills["sql-desktop"])
+        self.assertIn("ECG", skills["local-files"])
+        for text in skills.values():
+            # Generic manuals: no patient, path, table or vendor hints.
+            for banned in ("TUS-2026-0417", "Anna", "Ricci", "oncologia_demo", "OncologiaDemo",
+                           "esame_laboratorio", "SanitaCartella", "Montalcino", "Desktop",
+                           "assets", "ecg.jpg", "Epic", "portal", "Uitslagen", "SELF", " 63"):
+                self.assertNotIn(banned, text)
 
     def test_only_permitted_tunnel_origins_and_fixed_paths(self):
         self.assertEqual("https://demo.devtunnels.ms", upstream_origin("https://demo.devtunnels.ms/"))
@@ -185,7 +203,7 @@ class TesterTests(unittest.TestCase):
                     "bearer_token": "",
                     "tunnel_token": "",
                     "request": {
-                        "patient_id": "DEMO-100042",
+                        "patient_id": "TUS-2026-0417",
                         "source": "ehr",
                         "resources": ["observations"],
                     },
@@ -202,7 +220,7 @@ class TesterTests(unittest.TestCase):
             self.assertEqual(
                 "tunnel stored-tunnel-token", observed["tunnel"]
             )
-            self.assertEqual("DEMO-100042", observed["body"]["patient_id"])
+            self.assertEqual("TUS-2026-0417", observed["body"]["patient_id"])
         finally:
             for server, thread in zip((upstream, relay), threads):
                 server.shutdown()

@@ -8,16 +8,18 @@ computer use in controlled environments.
 | Demo | Simulator | Agent task |
 |---|---|---|
 | [Plant Operations](demos/plant-operations/README.md) | .NET 8 WPF industrial control-room simulator | Investigate and stabilize a synthetic compressor alarm |
-| [Epic Retrieval Agent](demos/epic-ehr/README.md) | Red-cross terminal, API, local files, and GPT Astra browser worker | Retrieve files or chart data as JSON, FHIR-style Bundles, or NDJSON; optional authenticated dev tunnel |
+| [Data Retrieval Agent - Ospedale di Montalcino](demos/epic-ehr/README.md) | Synthetic Italian clinician EMR + PACS, Italian SQL database, agent console and API | Retrieves patient data from any system on this workstation, maps it to the requested data standard (FHIR, OMOP, custom), and shares it with the requesting hospital |
 
 ## Safety
 
-- The public Epic adapter defaults to bundled synthetic fixtures.
-- The Epic EHR demo is not affiliated with or endorsed by Epic Systems.
-- Live Epic access is environment-specific and must be authorized by the
-  healthcare organization operating the VM.
-- Epic browser workflows are instructed to retrieve existing records only.
-  A read-only Epic account is required: model instructions do not enforce permissions.
+- The clinical demo uses no real or personal patient data. Its patient (Anna
+  Ricci), hospital and EMR/PACS products are invented; it defaults to bundled
+  synthetic fixtures and runs offline.
+- The clinical demo is not affiliated with or endorsed by any EMR vendor.
+- Live access to a real EMR is environment-specific and must be authorized by
+  the healthcare organization operating the VM.
+- EMR browser workflows are instructed to retrieve existing records only.
+  A read-only EMR account is required: model instructions do not enforce permissions.
 - Agents default to synthetic or dry-run mode.
 - Live mouse and keyboard control requires `ALLOW_COMPUTER_CONTROL=1`.
 - Screen capture fails closed unless the expected simulator window is present.

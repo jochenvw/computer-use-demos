@@ -35,7 +35,7 @@ def resource(resource_type: ResourceType, data: dict, source_id: str = "record-1
 
 
 def bundle(*resources: ClinicalResource) -> ClinicalBundle:
-    return ClinicalBundle(patient_id="DEMO-100042", resources=list(resources), files=[])
+    return ClinicalBundle(patient_id="TUS-2026-0417", resources=list(resources), files=[])
 
 
 def concept(code: str, text: str) -> dict:
@@ -58,7 +58,7 @@ def blood_pressure() -> ClinicalResource:
             ]
         ],
         "effectiveDateTime": "2026-09-10T09:10:00+02:00",
-        "subject": {"reference": "Patient/DEMO-100042"},
+        "subject": {"reference": "Patient/TUS-2026-0417"},
         "code": concept("85354-9", "Blood pressure panel"),
         "status": "final",
     })
@@ -76,7 +76,7 @@ class FhirFormatTests(unittest.TestCase):
         result = omop_json(bundle(blood_pressure()))
 
         self.assertEqual("5.4", result["cdm_version"])
-        self.assertEqual("DEMO-100042", result["tables"]["person"][0]["person_source_value"])
+        self.assertEqual("TUS-2026-0417", result["tables"]["person"][0]["person_source_value"])
         measurements = result["tables"]["measurement"]
         self.assertEqual(2, len(measurements))
         self.assertEqual(
@@ -88,13 +88,13 @@ class FhirFormatTests(unittest.TestCase):
 
     def test_patient_maps_to_fhir_patient(self) -> None:
         bundle = ClinicalBundle(
-            patient_id="DEMO-100042",
+            patient_id="TUS-2026-0417",
             resources=[
                 ClinicalResource(
                     resource_type=ResourceType.patient,
-                    source_id="DEMO-100042",
+                    source_id="TUS-2026-0417",
                     data={
-                        "name": [{"family": "Rivera", "given": ["Jamie"]}],
+                        "name": [{"family": "Ricci", "given": ["Anna"]}],
                         "birthDate": "1984-05-17",
                     },
                     provenance=SourceRecord(source="test"),
@@ -155,10 +155,10 @@ class FhirFormatTests(unittest.TestCase):
         self.assertEqual("collection", ET.fromstring(fhir_xml(original, BASE_URL))[0].get("value"))
 
     def test_xml_patient_primitives_order_arrays_and_escaping(self) -> None:
-        text = 'Rivera & <Lee> "Quoted"'
+        text = 'Ricci & <Lee> "Quoted"'
         original = bundle(resource(ResourceType.patient, {
             "birthDate": "1984-05-17",
-            "name": [{"given": ["Jamie", "Alex"], "family": text}],
+            "name": [{"given": ["Anna", "Alex"], "family": text}],
             "active": False,
             "identifier": [{"value": "abc&123", "system": "https://example.test/mrn"}],
         }, "patient-1"))
@@ -175,7 +175,7 @@ class FhirFormatTests(unittest.TestCase):
         self.assertEqual("false", patient.find("f:active", NS).get("value"))
         self.assertEqual(text, patient.find("f:name/f:family", NS).get("value"))
         self.assertEqual(
-            ["Jamie", "Alex"],
+            ["Anna", "Alex"],
             [node.get("value") for node in patient.findall("f:name/f:given", NS)],
         )
         self.assertIn("&amp;", xml)
@@ -465,8 +465,8 @@ class FixtureFormatTests(unittest.TestCase):
         for types in (list(ResourceType), [ResourceType.ecg]):
             with self.subTest(types=types):
                 original = ClinicalBundle(
-                    patient_id="DEMO-100042",
-                    resources=adapter.retrieve("DEMO-100042", types),
+                    patient_id="TUS-2026-0417",
+                    resources=adapter.retrieve("TUS-2026-0417", types),
                     files=[],
                 )
                 before = copy.deepcopy(original.model_dump())
@@ -481,10 +481,11 @@ class FixtureFormatTests(unittest.TestCase):
                 )
                 self.assertEqual(len(original.resources), len(fhir["entry"]))
                 self.assertEqual(len(original.resources), len(xml.findall("f:entry", NS)))
-                report = xml.find("f:entry/f:resource/f:DiagnosticReport", NS)
-                self.assertIsNotNone(report)
+                reports = xml.findall("f:entry/f:resource/f:DiagnosticReport", NS)
+                self.assertTrue(reports)
                 ecg = next(record for record in original.resources if record.resource_type == ResourceType.ecg)
-                self.assertEqual(ecg.data["conclusion"], report.find("f:conclusion", NS).get("value"))
+                self.assertIn(ecg.data["conclusion"],
+                              [item.find("f:conclusion", NS).get("value") for item in reports])
                 obxs = [line.split("|") for line in message.split("\r") if line.startswith("OBX|")]
                 self.assertEqual(1, sum(obx[5] == ecg.data["conclusion"] for obx in obxs))
                 if types == [ResourceType.ecg]:
@@ -492,9 +493,10 @@ class FixtureFormatTests(unittest.TestCase):
                     self.assertEqual("TX", obxs[0][2])
                 else:
                     numeric = [obx for obx in obxs if obx[2] == "NM"]
-                    self.assertEqual(2, len(numeric))
-                    self.assertEqual(
-                        {("8480-6", "120", "mm[Hg]^mmHg^UCUM"), ("8462-4", "80", "mm[Hg]^mmHg^UCUM")},
+                    self.assertEqual(14, len(numeric))
+                    self.assertLessEqual(
+                        {("8480-6", "120", "mm[Hg]^mmHg^UCUM"), ("8462-4", "80", "mm[Hg]^mmHg^UCUM"),
+                         ("718-7", "8.1", "g/dL^g/dL^UCUM"), ("2039-6", "18.4", "ng/mL^ng/mL^UCUM")},
                         {(obx[3].split("^")[0], obx[5], obx[6]) for obx in numeric},
                     )
                 self.assertTrue(message.endswith("\r"))

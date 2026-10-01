@@ -27,7 +27,7 @@ def settings():
     )
 
 
-def patient_result(patient_id="DEMO-100042"):
+def patient_result(patient_id="TUS-2026-0417"):
     return {"patient_id": patient_id, "resources": [{
         "resource_type": "patient", "source_id": patient_id, "data": {},
     }]}
@@ -150,13 +150,13 @@ class ComputerUseTests(unittest.TestCase):
 
     def test_cli_skill_uses_screenshots_and_scoped_sdk_session(self):
         adapter = self.build([("observe", {}), ("finish", patient_result())])
-        result = adapter.retrieve("DEMO-100042", [ResourceType.patient])
-        self.assertEqual("epic-browser-observed", result[0].provenance.source)
+        result = adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
+        self.assertEqual("emr-browser-observed", result[0].provenance.source)
         self.assertTrue(self.browser.closed)
         self.assertEqual(1, len(self.browser.threads))
         options = self.client.options
         self.assertEqual("gpt-6-astra", options["model"])
-        self.assertEqual(["epic-browser"], options["custom_agents"][0]["skills"])
+        self.assertEqual(["emr-browser"], options["custom_agents"][0]["skills"])
         self.assertEqual("empty", self.client.client_options["mode"])
         self.assertFalse(options["enable_config_discovery"])
         self.assertFalse(options["enable_session_store"])
@@ -177,7 +177,7 @@ class ComputerUseTests(unittest.TestCase):
             {"finish", "stop", "observe", "click", "type_text", "press_key", "scroll"},
             set(self.client.tools),
         )
-        self.assertIn("name: epic-browser", self.client.skill_text)
+        self.assertIn("name: emr-browser", self.client.skill_text)
         self.assertEqual("c3ludGhldGlj", self.client.results[0].binary_results_for_llm[0].data)
         self.assertTrue(self.client.aborted and self.client.disconnected and self.client.deleted)
         self.assertTrue(self.client.closed)
@@ -186,18 +186,18 @@ class ComputerUseTests(unittest.TestCase):
     def test_wrong_patient_fails(self):
         adapter = self.build([("observe", {}), ("finish", patient_result("OTHER"))])
         with self.assertRaises(RuntimeError):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
 
     def test_host_assigns_requested_subject(self):
         adapter = self.build([("observe", {}), ("finish", {
-            "patient_id": "DEMO-100042", "resources": [{
+            "patient_id": "TUS-2026-0417", "resources": [{
                 "resource_type": "ecg", "source_id": "ecg-1",
                 "data": {"subject": {"reference": "Patient/OTHER"}},
             }],
         })])
-        bundle = adapter.retrieve("DEMO-100042", [ResourceType.ecg])
+        bundle = adapter.retrieve("TUS-2026-0417", [ResourceType.ecg])
         self.assertEqual(
-            {"reference": "Patient/DEMO-100042"}, bundle[0].data["subject"]
+            {"reference": "Patient/TUS-2026-0417"}, bundle[0].data["subject"]
         )
 
     def test_model_cannot_type_arbitrary_text_or_recover_from_failure(self):
@@ -206,65 +206,112 @@ class ComputerUseTests(unittest.TestCase):
             ("observe", {}), ("finish", patient_result()),
         ])
         with self.assertRaises(ValueError):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
         self.assertEqual([], self.browser.actions)
         self.assertEqual("denied", self.client.results[-1].result_type)
 
     def test_strict_host_tool_arguments(self):
         adapter = self.build([("click", {"x": True, "y": 0})])
         with self.assertRaises(RuntimeError):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
         self.assertEqual([], self.browser.actions)
 
     def test_expired_session_stops(self):
         adapter = self.build([("stop", {"reason": "session_expired"})])
         with self.assertRaisesRegex(RuntimeError, "session_expired"):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
 
-    def test_synthetic_portal_adds_explicit_supported_workflow_prompt(self):
-        config = replace(
-            settings(),
-            synthetic_portal_enabled=True,
+    def synthetic_emr(self, **changes):
+        return replace(
+            settings(), synthetic_portal_enabled=True,
             epic_origin="http://127.0.0.1:8001",
-            epic_ready_url_prefix="http://127.0.0.1:8001/",
+            epic_ready_url_prefix="http://127.0.0.1:8001/", **changes,
         )
+
+    def test_prompt_has_no_navigation_hints_by_default(self):
+        adapter = self.build(
+            [("observe", {}), ("finish", patient_result())], config=self.synthetic_emr(),
+        )
+        adapter.retrieve(
+            "TUS-2026-0417", [ResourceType.patient],
+            instruction="Retrieve all relevant medical information for patient Anna Ricci.",
+            patient_name="Anna Ricci",
+        )
+        prompt = self.client.options["custom_agents"][0]["prompt"]
+        self.assertIn("Data Retrieval Agent of Ospedale di Montalcino", prompt)
+        self.assertIn("never where the data is", prompt)
+        for hint in ("Operator hint", "Riepilogo", "worklist", "Uitslagen", "OncologiaDemo"):
+            self.assertNotIn(hint, prompt)
+        self.assertEqual({
+            "instruction": "Retrieve all relevant medical information for patient Anna Ricci.",
+            "patient_name": "Anna Ricci", "patient_id": "TUS-2026-0417",
+            "resources": ["patient"],
+        }, self.client.prompt)
+
+    def test_navigation_hints_are_operator_opt_in(self):
         adapter = self.build(
             [("observe", {}), ("finish", patient_result())],
-            config=config,
+            config=self.synthetic_emr(navigation_hints=True),
         )
-        adapter.retrieve("DEMO-100042", [ResourceType.patient])
+        adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
         prompt = self.client.options["custom_agents"][0]["prompt"]
-        self.assertIn("click Uitslagen", prompt)
-        self.assertIn("click Bloedonderzoek", prompt)
-        self.assertIn("does not require patient search", prompt)
+        self.assertIn("Operator hint", prompt)
+        self.assertIn("worklist", prompt)
 
-    def test_personal_portal_uses_current_authenticated_account(self):
-        config = replace(settings(), personal_portal_enabled=True)
+    def test_agent_may_type_only_the_requested_name_or_identifier(self):
+        adapter = self.build([
+            ("type_text", {"text": "Anna Ricci"}),
+            ("type_text", {"text": "TUS-2026-0417"}),
+            ("observe", {}), ("finish", patient_result()),
+        ], config=self.synthetic_emr())
+        adapter.retrieve("TUS-2026-0417", [ResourceType.patient], patient_name="Anna Ricci")
+        self.assertEqual(
+            [("type_text", {"text": "Anna Ricci"}), ("type_text", {"text": "TUS-2026-0417"}),
+             ("observe", {})],
+            self.browser.actions,
+        )
+        adapter = self.build([("type_text", {"text": "Antonio Ricci"})], config=self.synthetic_emr())
+        with self.assertRaises(ValueError):
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient], patient_name="Anna Ricci")
+        self.assertEqual([], self.browser.actions)
+
+    def test_pacs_viewer_returns_preliminary_imaging_report(self):
+        report = {
+            "patient_id": "TUS-2026-0417",
+            "resources": [{
+                "resource_type": "imaging", "source_id": "MTL-26-08817",
+                "data": {
+                    "status": "preliminary",
+                    "code": {"coding": [{"system": "http://loinc.org", "code": "18748-4"}]},
+                    "conclusion": "Report text: two liver lesions. Preliminary: "
+                                  "transcribed by AI, verify against source.",
+                },
+            }],
+        }
         adapter = self.build(
-            [("observe", {}), ("finish", patient_result("SELF"))],
-            config=config,
+            [("observe", {}), ("click", {"x": 10, "y": 20}), ("finish", report)],
+            config=self.synthetic_emr(),
         )
-
-        adapter.retrieve("SELF", [ResourceType.patient])
-
+        bundle = adapter.retrieve_pacs("TUS-2026-0417", [ResourceType.imaging])
+        self.assertEqual(["pacs-viewer"], self.client.options["custom_agents"][0]["skills"])
+        self.assertIn("name: pacs-viewer", self.client.skill_text)
+        self.assertEqual("pacs-viewer-observed", bundle.resources[0].provenance.source)
+        self.assertEqual(ResourceType.imaging, bundle.resources[0].resource_type)
+        self.assertIn("type_text", self.client.tools)
         prompt = self.client.options["custom_agents"][0]["prompt"]
-        self.assertIn("personal patient portal session", prompt)
-        self.assertIn("Do not search for another patient", prompt)
-        stop_schema = self.client.tools["stop"].parameters
-        self.assertNotIn(
-            "patient_not_verified",
-            json.dumps(stop_schema),
-        )
+        self.assertIn("Preliminary: transcribed by AI, verify against source.", prompt)
+        self.assertIn("no interpretation or diagnosis", prompt.replace("add no ", "no ").replace(
+            "interpretation or diagnosis of your own", "interpretation or diagnosis"))
 
     def test_sql_desktop_writes_query_and_returns_observation(self):
         observation = {
-            "patient_id": "SYN-2026-0001",
+            "patient_id": "TUS-2026-0417",
             "resources": [{
                 "resource_type": "observations",
                 "source_id": "lab-HB-1",
                 "data": {
                     "status": "final",
-                    "subject": {"reference": "Patient/SYN-2026-0001"},
+                    "subject": {"reference": "Patient/TUS-2026-0417"},
                     "code": {"coding": [{"code": "HB", "display": "Emoglobina"}]},
                     "effectiveDateTime": "2026-09-21T08:30:00",
                     "valueQuantity": {"value": 10.4, "unit": "g/dL"},
@@ -274,7 +321,7 @@ class ComputerUseTests(unittest.TestCase):
         query = (
             "SELECT e.codice, e.valore_numerico FROM oncologia_demo.esame_laboratorio e "
             "JOIN oncologia_demo.paziente p ON p.paziente_id = e.paziente_id "
-            "WHERE p.mrn = N'SYN-2026-0001'"
+            "WHERE p.mrn = N'TUS-2026-0417'"
         )
         with tempfile.TemporaryDirectory() as directory:
             adapter = self.build(
@@ -292,7 +339,7 @@ class ComputerUseTests(unittest.TestCase):
             )
 
             result = adapter.retrieve_sql(
-                "SYN-2026-0001", [ResourceType.observations],
+                "TUS-2026-0417", [ResourceType.observations],
             )
 
         self.assertEqual(
@@ -305,13 +352,14 @@ class ComputerUseTests(unittest.TestCase):
         )
         self.assertTrue(self.desktop.closed)
         prompt = self.client.options["custom_agents"][0]["prompt"]
-        self.assertIn("OncologiaDemo", prompt)
-        self.assertIn("mrn", self.client.skill_text)
+        self.assertIn("INFORMATION_SCHEMA", prompt)
+        self.assertNotIn("OncologiaDemo", prompt)
+        self.assertIn("MRN", self.client.skill_text)
 
     def test_action_budget_is_enforced(self):
         adapter = self.build([("observe", {})] * 5)
         with self.assertRaisesRegex(RuntimeError, "action limit"):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
         self.assertEqual(4, len(self.browser.actions))
 
     def test_timeout_aborts_deletes_and_closes_browser(self):
@@ -321,7 +369,7 @@ class ComputerUseTests(unittest.TestCase):
 
         adapter = self.build(timeout)
         with self.assertRaises(TimeoutError):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
         self.assertTrue(self.client.aborted and self.client.deleted and self.browser.closed)
 
     def test_unexpected_builtin_permission_fails_closed(self):
@@ -332,7 +380,7 @@ class ComputerUseTests(unittest.TestCase):
 
         adapter = self.build(permission)
         with self.assertRaisesRegex(RuntimeError, "unapproved"):
-            adapter.retrieve("DEMO-100042", [ResourceType.patient])
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
         self.assertEqual([], self.browser.actions)
 
     def test_remote_browser_debugging_is_rejected(self):
@@ -361,7 +409,7 @@ class ComputerUseTests(unittest.TestCase):
         with patch.dict(os.environ, {"COPILOT_GITHUB_TOKEN": ""}):
             with self.assertRaisesRegex(RuntimeError, "COPILOT_GITHUB_TOKEN"):
                 runner.retrieve(
-                    "local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()),
+                    "local-files", "TUS-2026-0417", [ResourceType.ecg], FileCatalog(()),
                 )
 
 
@@ -371,13 +419,13 @@ class LocalFileSkillTests(unittest.TestCase):
             listed = await client.invoke("list_patient_files", {})
             file_id = json.loads(listed.text_result_for_llm)[0]["file_id"]
             opened = await client.invoke("open_patient_file", {"file_id": file_id})
-            self.assertIn("Synthetic sinus rhythm", opened.text_result_for_llm)
+            self.assertIn("Synthetic sinus tachycardia, rate 104", opened.text_result_for_llm)
             await client.invoke("finish", {
-                "patient_id": "DEMO-100042", "resources": [{
+                "patient_id": "TUS-2026-0417", "resources": [{
                     "resource_type": "ecg", "source_id": "local-ecg-1",
                     "evidence_file_id": file_id,
                     "data": {
-                        "subject": {"reference": "Patient/DEMO-100042"},
+                        "subject": {"reference": "Patient/TUS-2026-0417"},
                         "conclusion": "Synthetic sinus rhythm",
                     },
                 }],
@@ -388,7 +436,7 @@ class LocalFileSkillTests(unittest.TestCase):
             settings(), client_factory=client.factory, require_runtime_token=False,
         )
         catalog = FileCatalog((settings().fixture_root / "files",))
-        bundle = runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], catalog)
+        bundle = runner.retrieve("local-files", "TUS-2026-0417", [ResourceType.ecg], catalog)
         self.assertEqual("Synthetic sinus rhythm", bundle.resources[0].data["conclusion"])
         self.assertEqual(1, len(bundle.files))
         self.assertEqual(["local-files"], client.options["custom_agents"][0]["skills"])
@@ -405,14 +453,14 @@ class LocalFileSkillTests(unittest.TestCase):
             settings(), client_factory=client.factory, require_runtime_token=False,
         )
         with self.assertRaises(RuntimeError):
-            runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()))
+            runner.retrieve("local-files", "TUS-2026-0417", [ResourceType.ecg], FileCatalog(()))
 
     def test_unopened_file_cannot_be_evidence(self):
         client = FakeClient([
             ("list_patient_files", {}), ("finish", {
-                "patient_id": "DEMO-100042", "resources": [{
+                "patient_id": "TUS-2026-0417", "resources": [{
                     "resource_type": "ecg", "source_id": "ecg", "evidence_file_id": "invented",
-                    "data": {"subject": {"reference": "Patient/DEMO-100042"}},
+                    "data": {"subject": {"reference": "Patient/TUS-2026-0417"}},
                 }],
             }),
         ])
@@ -420,7 +468,7 @@ class LocalFileSkillTests(unittest.TestCase):
             settings(), client_factory=client.factory, require_runtime_token=False,
         )
         with self.assertRaises(RuntimeError):
-            runner.retrieve("local-files", "DEMO-100042", [ResourceType.ecg], FileCatalog(()))
+            runner.retrieve("local-files", "TUS-2026-0417", [ResourceType.ecg], FileCatalog(()))
 
     def test_file_read_limit_and_hash_recheck(self):
         with tempfile.TemporaryDirectory() as directory:

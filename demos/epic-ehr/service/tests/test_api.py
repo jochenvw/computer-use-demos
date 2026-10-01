@@ -48,7 +48,7 @@ class ApiTests(unittest.TestCase):
 
     def test_retrieval_job_returns_json_fhir_and_file(self) -> None:
         status_payload = self.create_and_wait({
-            "patient_id": "DEMO-100042",
+            "patient_id": "TUS-2026-0417",
             "resources": ["patient", "ecg"],
         })
         self.assertEqual("complete", status_payload["status"])
@@ -59,7 +59,7 @@ class ApiTests(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(200, json_response.status_code)
-        self.assertEqual("DEMO-100042", json_response.json()["patient_id"])
+        self.assertEqual("TUS-2026-0417", json_response.json()["patient_id"])
         self.assertEqual(1, len(json_response.json()["files"]))
 
         fhir_response = self.client.get(
@@ -77,13 +77,52 @@ class ApiTests(unittest.TestCase):
         audit_text = Path(os.environ["EPIC_AUDIT_PATH"]).read_text(
             encoding="utf-8"
         )
-        self.assertNotIn("DEMO-100042", audit_text)
+        self.assertNotIn("TUS-2026-0417", audit_text)
         for line in audit_text.splitlines():
             json.loads(line)
 
+    def test_three_scenarios_run_offline_with_visible_task_and_handover(self) -> None:
+        instruction = "Retrieve all relevant medical information for patient Anna Ricci."
+        for source, resources, expected in (
+            ("ehr", ["patient", "observations", "documents"], "Patient"),
+            ("pacs", ["imaging"], "DiagnosticReport"),
+            ("sql", ["patient", "observations"], "Observation"),
+        ):
+            with self.subTest(source=source):
+                status_payload = self.create_and_wait({
+                    "patient_id": "TUS-2026-0417", "source": source,
+                    "resources": resources, "instruction": instruction,
+                    "bypass_cache": True,
+                })
+                self.assertEqual("complete", status_payload["status"])
+                kinds = [event["kind"] for event in status_payload["timeline"]]
+                self.assertEqual("task", kinds[0])
+                self.assertEqual(instruction, status_payload["timeline"][0]["text"])
+                self.assertEqual("handover", kinds[-1])
+                self.assertIn("MDT dashboard, UMC Utrecht", status_payload["timeline"][-1]["text"])
+                self.assertIn("FHIR, OMOP or a custom schema", status_payload["timeline"][-1]["text"])
+                fhir = self.client.get(
+                    f"/v1/retrieval-jobs/{status_payload['job_id']}/result?format=fhir",
+                    headers=self.headers,
+                ).json()
+                types = {entry["resource"]["resourceType"] for entry in fhir["entry"]}
+                self.assertIn(expected, types)
+                omop = self.client.get(
+                    f"/v1/retrieval-jobs/{status_payload['job_id']}/result?format=omop",
+                    headers=self.headers,
+                )
+                self.assertEqual(200, omop.status_code)
+
+    def test_instruction_rejects_markup_and_overlong_text(self) -> None:
+        for instruction in ("<script>alert(1)</script>", "x" * 201, "Open C:\\EpicDemo"):
+            response = self.client.post("/v1/retrieval-jobs", headers=self.headers, json={
+                "patient_id": "TUS-2026-0417", "instruction": instruction,
+            })
+            self.assertEqual(422, response.status_code, instruction)
+
     def test_default_fhir_xml_hl7_bp_filter_and_cache_metadata(self) -> None:
         payload = {
-            "patient_id": "DEMO-100042",
+            "patient_id": "TUS-2026-0417",
             "source": "ehr",
             "resources": ["observations"],
             "observation_codes": ["85354-9"],
@@ -150,7 +189,7 @@ class ApiTests(unittest.TestCase):
 
     def test_failed_bypass_invalidates_stale_api_cache_entry(self) -> None:
         payload = {
-            "patient_id": "DEMO-100042",
+            "patient_id": "TUS-2026-0417",
             "source": "ehr",
             "resources": ["observations"],
             "observation_codes": ["8480-6"],
@@ -166,7 +205,7 @@ class ApiTests(unittest.TestCase):
 
     def test_unsupported_representation_returns_422(self) -> None:
         job = self.create_and_wait({
-            "patient_id": "DEMO-100042", "source": "files", "resources": ["ecg"],
+            "patient_id": "TUS-2026-0417", "source": "files", "resources": ["ecg"],
         })
         self.assertEqual("complete", job["status"])
         response = self.client.get(
@@ -182,7 +221,7 @@ class ApiTests(unittest.TestCase):
     def test_rejects_missing_bearer_token(self) -> None:
         response = self.client.post(
             "/v1/retrieval-jobs",
-            json={"patient_id": "DEMO-100042"},
+            json={"patient_id": "TUS-2026-0417"},
         )
         self.assertEqual(401, response.status_code)
 
@@ -196,7 +235,7 @@ class ApiTests(unittest.TestCase):
     def test_unknown_source_is_rejected(self):
         response = self.client.post(
             "/v1/retrieval-jobs", headers=self.headers,
-            json={"patient_id": "DEMO-100042", "source": "desktop"},
+            json={"patient_id": "TUS-2026-0417", "source": "desktop"},
         )
         self.assertEqual(422, response.status_code)
 

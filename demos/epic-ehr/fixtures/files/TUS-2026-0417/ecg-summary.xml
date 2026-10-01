@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SyntheticEcg patientId="TUS-2026-0417">
+  <AcquiredAt>2026-09-18T22:50:00+02:00</AcquiredAt>
+  <Interpretation>Training data only. Synthetic sinus tachycardia, rate 104.</Interpretation>
+</SyntheticEcg>

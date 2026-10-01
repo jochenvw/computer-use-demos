@@ -28,7 +28,7 @@ class Settings:
     cache_max_entries: int = 16
     cache_max_bytes: int = 8 * 1024 * 1024
     synthetic_portal_enabled: bool = False
-    personal_portal_enabled: bool = False
+    navigation_hints: bool = False
     visible_file_demo_enabled: bool = False
     ssms_executable: Path = Path(
         r"C:\Program Files (x86)\Microsoft SQL Server Management Studio 20"
@@ -87,9 +87,7 @@ class Settings:
             synthetic_portal_enabled=os.environ.get(
                 "EPIC_SYNTHETIC_PORTAL", ""
             ) == "1",
-            personal_portal_enabled=os.environ.get(
-                "EPIC_PERSONAL_PORTAL", ""
-            ) == "1",
+            navigation_hints=os.environ.get("EPIC_NAVIGATION_HINTS", "") == "1",
             visible_file_demo_enabled=os.environ.get(
                 "EPIC_VISIBLE_FILE_DEMO", ""
             ) == "1",
@@ -125,10 +123,6 @@ class Settings:
         if self.reasoning_summary not in {"none", "concise", "detailed"}:
             raise RuntimeError("EPIC_REASONING_SUMMARY must be none, concise or detailed.")
         if self.backend in {"copilot", "computer-use"}:
-            if self.synthetic_portal_enabled and self.personal_portal_enabled:
-                raise RuntimeError(
-                    "Synthetic and personal portal modes are mutually exclusive."
-                )
             missing = [
                 name
                 for name, value in {
@@ -156,7 +150,7 @@ class Settings:
                     or origin.path or origin.query or origin.fragment):
                 raise RuntimeError(
                     "EPIC_ORIGIN must be an exact HTTPS origin with no path, "
-                    "or an explicit loopback HTTP origin in synthetic portal mode."
+                    "or an explicit loopback HTTP origin in synthetic EMR mode."
                 )
             ready_url = urlsplit(self.epic_ready_url_prefix)
             ready_port = ready_url.port

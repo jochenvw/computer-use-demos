@@ -20,28 +20,36 @@ class NarrativeTests(unittest.TestCase):
         )
         kind, text = describe_step("sql-desktop", "observe", {}, first_observe=True)
         self.assertIn("SQL Server Management Studio", text)
-        kind, text = describe_step("epic-browser", "stop", {"reason": "session_expired"})
+        kind, text = describe_step("emr-browser", "stop", {"reason": "session_expired"})
         self.assertEqual("warn", kind)
-        self.assertIn("log in again", text)
+        self.assertIn("EMR session", text)
+        self.assertIn("PACS", describe_step("pacs-viewer", "click", {"x": 1, "y": 2})[1])
+        self.assertIn("the EMR", describe_step("emr-browser", "observe", {})[1])
 
     def test_results_are_summarized(self):
         self.assertEqual(
-            "Rate: 63 /min (2026-09-01)",
+            "Rate: 104 /min (2026-09-18)",
             summarize(resource(ResourceType.observations, {
-                "code": {"text": "Rate"}, "valueQuantity": {"value": 63, "unit": "/min"},
-                "effectiveDateTime": "2026-09-01T10:00:00Z",
+                "code": {"text": "Rate"}, "valueQuantity": {"value": 104, "unit": "/min"},
+                "effectiveDateTime": "2026-09-18T22:50:00Z",
             })),
         )
         self.assertEqual(
-            "Patient: Maria Rossi · female · 1961-04-02",
+            "Patient: Anna Ricci · female · 1971-03-14",
             summarize(resource(ResourceType.patient, {
-                "name": [{"given": ["Maria"], "family": "Rossi"}],
-                "gender": "female", "birthDate": "1961-04-02",
+                "name": [{"given": ["Anna"], "family": "Ricci"}],
+                "gender": "female", "birthDate": "1971-03-14",
             })),
         )
         self.assertTrue(summarize(resource(
-            ResourceType.ecg, {"conclusion": "Printed on ECG: Rate 63"},
+            ResourceType.ecg, {"conclusion": "Printed on ECG: Rate 104"},
         )).startswith("ECG report: Printed on ECG"))
+        self.assertEqual(
+            "Imaging report (RM fegato): two liver lesions",
+            summarize(resource(ResourceType.imaging, {
+                "code": {"text": "RM fegato"}, "conclusion": "two liver lesions",
+            })),
+        )
 
     def test_story_feeds_active_timeline_only(self):
         timeline = []
@@ -59,11 +67,11 @@ class NarrativeTests(unittest.TestCase):
     def test_window_titles_match_opened_files(self):
         from epic_adapter.desktop import _title_matches
 
-        names = ["assets", "ecg.jpg"]
-        for title in ("assets", r"C:\Users\demo\Desktop\assets", "ecg - Paint",
+        names = ["TUS-2026-0417", "ecg.jpg"]
+        for title in ("TUS-2026-0417", r"C:\EpicDemo\files\TUS-2026-0417", "ecg - Paint",
                       "ecg.jpg - Photos"):
             self.assertTrue(_title_matches(title, names), title)
-        for title in ("Mijn Dossier - Microsoft Edge", "ecgviewer", "assets backup"):
+        for title in ("SanitaCartella - Microsoft Edge", "ecgviewer", "TUS-2026-0417 backup"):
             self.assertFalse(_title_matches(title, names), title)
 
 

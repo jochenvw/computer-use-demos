@@ -9,7 +9,7 @@ from epic_adapter.sql_demo import validate_select
 class SqlValidationTests(unittest.TestCase):
     def test_accepts_single_select_and_scopes_database(self):
         sql = validate_select(
-            "SELECT p.mrn FROM oncologia_demo.paziente p WHERE p.mrn = N'SYN-2026-0001';"
+            "SELECT p.mrn FROM oncologia_demo.paziente p WHERE p.mrn = N'TUS-2026-0417';"
         )
         self.assertTrue(sql.startswith("USE OncologiaDemo;\nSELECT"))
 
@@ -42,9 +42,9 @@ class SharedAssetTests(unittest.TestCase):
             (assets / "ecg.jpg").write_bytes(b"\xff\xd8fake")
             (assets / "setup.sql").write_text("SELECT 1")
             catalog = FileCatalog((), (assets,))
-            records = catalog.find("DEMO-100042")
+            records = catalog.find("TUS-2026-0417")
             self.assertEqual(["ecg.jpg"], [record.name for record in records])
-            _, image = catalog.open_for_skill(records[0], "DEMO-100042")
+            _, image = catalog.open_for_skill(records[0], "TUS-2026-0417")
             self.assertEqual(b"\xff\xd8fake", image)
             self.assertEqual(
                 (assets / "ecg.jpg").resolve(), catalog.verify(records[0], "OTHER")

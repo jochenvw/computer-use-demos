@@ -7,6 +7,6 @@ from ..models import ClinicalResource, ResourceType
 
 class EhrAdapter(Protocol):
     def retrieve(
-        self, patient_id: str, resources: list[ResourceType]
+        self, patient_id: str, resources: list[ResourceType], **request,
     ) -> list[ClinicalResource]:
         """Retrieve normalized read-only resources for one patient."""

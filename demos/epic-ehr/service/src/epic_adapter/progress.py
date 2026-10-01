@@ -14,7 +14,7 @@ import time
 
 logger = logging.getLogger("epic_adapter.progress")
 
-KINDS = ("start", "step", "query", "thinking", "agent", "result", "done", "warn", "error", "info")
+KINDS = ("task", "start", "step", "query", "thinking", "agent", "result", "done", "warn", "error", "info", "handover")
 _MAX_EVENTS = 300
 _MAX_TEXT = 700
 

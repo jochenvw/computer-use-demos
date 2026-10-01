@@ -156,7 +156,7 @@ class RuntimeTests(unittest.TestCase):
                 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
                 with urlopen(Request(
                     base + "/v1/retrieval-jobs",
-                    data=json.dumps({"patient_id": "DEMO-100042", "source": "files"}).encode(),
+                    data=json.dumps({"patient_id": "TUS-2026-0417", "source": "files"}).encode(),
                     headers=headers,
                 ), timeout=5) as response:
                     self.assertEqual(202, response.status)
@@ -216,8 +216,8 @@ class RuntimeTests(unittest.TestCase):
             with BrowserSession(config) as browser:
                 self.assertTrue(browser.screenshot().startswith("data:image/jpeg;base64,"))
                 browser.execute("click", {"x": 30, "y": 18})
-                browser.execute("type_text", {"text": "DEMO-100042"})
-                self.assertEqual("DEMO-100042", browser._page.locator("input").input_value())
+                browser.execute("type_text", {"text": "TUS-2026-0417"})
+                self.assertEqual("TUS-2026-0417", browser._page.locator("input").input_value())
                 browser.execute("press_key", {"key": "Tab"})
                 browser.execute("press_key", {"key": "Enter"})
                 self.assertEqual("Clicked", browser._page.title())

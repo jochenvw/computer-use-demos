@@ -38,20 +38,25 @@ jobs = JobService(
     ),
     backend_scope=settings.backend,
     file_retriever=(
-        lambda patient_id, resources, catalog: adapter.runner.retrieve(
-            "local-files", patient_id, resources, catalog,
+        lambda patient_id, resources, catalog, **request: adapter.runner.retrieve(
+            "local-files", patient_id, resources, catalog, **request,
         )
     ) if isinstance(adapter, ComputerUseEpicAdapter) else None,
+    # Fixture mode answers PACS and database scenarios from the same offline fixture.
     database_retriever=(
-        adapter.retrieve_sql
-        if isinstance(adapter, ComputerUseEpicAdapter)
-        else None
+        adapter.retrieve_sql if isinstance(adapter, ComputerUseEpicAdapter) else adapter.bundle
+    ),
+    pacs_retriever=(
+        adapter.retrieve_pacs if isinstance(adapter, ComputerUseEpicAdapter) else adapter.bundle
     ),
 )
 app = FastAPI(
-    title="Epic EHR Data Adapter Demo",
+    title="Data Retrieval Agent - Ospedale di Montalcino",
     version="0.2.0",
-    description="Read-only clinical data retrieval through an opaque backend.",
+    description=(
+        "Retrieves patient data from any system on this workstation, maps it to the "
+        "requested data standard, and shares it with the requesting hospital."
+    ),
 )
 
 

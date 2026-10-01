@@ -70,10 +70,10 @@ class BrowserSession:
             raise RuntimeError("A new browser window was requested; this workflow is not supported.")
         if (self._page is None or self._page.is_closed()
                 or origin_of(self._page.url) != origin_of(self.settings.epic_origin)):
-            raise RuntimeError("The approved Epic tab is unavailable or left its allowed origin.")
+            raise RuntimeError("The approved EMR tab is unavailable or left its allowed origin.")
         if self.settings.browser_window_title:
             if self._page.title() != self.settings.browser_window_title:
-                raise RuntimeError("The Epic tab title no longer matches the configured title.")
+                raise RuntimeError("The EMR tab title no longer matches the configured title.")
 
     def screenshot(self) -> str:
         self._check()

@@ -33,6 +33,58 @@ from .sql_demo import ensure_query, validate_select
 
 logger = logging.getLogger(__name__)
 
+BROWSER_SKILLS = frozenset({"emr-browser", "pacs-viewer"})
+SKILLS = BROWSER_SKILLS | {"local-files", "sql-desktop"}
+TRANSCRIBE = (
+    " Transcribe only text and numbers printed or plainly visible; add no "
+    "interpretation or diagnosis of your own. Return imaging or ECG reports as "
+    "DiagnosticReport with status preliminary and a conclusion that ends with "
+    "'Preliminary: transcribed by AI, verify against source.'"
+)
+SKILL_PROMPTS = {
+    "emr-browser": (
+        " Explore the clinician EMR in the approved browser tab with observe, "
+        "click and type_text, find the requested patient, and read the "
+        "requested data from the chart." + TRANSCRIBE
+    ),
+    "pacs-viewer": (
+        " Explore the imaging (PACS) application in the approved browser tab, "
+        "find the requested patient's studies, look at the images, and read the "
+        "radiology report." + TRANSCRIBE
+    ),
+    "sql-desktop": (
+        " Use observe to open SSMS on the local database, discover the schema "
+        "with read-only SELECT queries (INFORMATION_SCHEMA), find the patient, "
+        "read the result grids from screenshots, map the rows to FHIR-compatible "
+        "resources, and finish."
+    ),
+    "local-files": (
+        " List the approved patient files, open the relevant ones, and finish "
+        "with what they contain." + TRANSCRIBE
+    ),
+}
+# Operator fallback only (EPIC_NAVIGATION_HINTS=1); off by default so the agent
+# must discover where the data lives. Never shown in the visible instruction.
+NAVIGATION_HINTS = {
+    "emr-browser": (
+        " Operator hint: search the worklist for the patient, open the chart, "
+        "then read the Riepilogo, Esami di laboratorio and Note cliniche tabs."
+    ),
+    "pacs-viewer": (
+        " Operator hint: open the Immagini (PACS) application, search the patient, "
+        "open the MRI study, page through a series, and transcribe the Referto."
+    ),
+    "sql-desktop": (
+        " Operator hint: the local database is OncologiaDemo, schema "
+        "oncologia_demo; patient_id is paziente.mrn. Discover columns via "
+        "INFORMATION_SCHEMA, then query patient and latest labs."
+    ),
+    "local-files": (
+        " Operator hint: list the patient files, open the ECG summary, and "
+        "transcribe only printed values."
+    ),
+}
+
 
 class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -86,13 +138,6 @@ class Stop(Arguments):
     ]
 
 
-class PersonalPortalStop(Arguments):
-    reason: Literal[
-        "session_expired", "unsupported_workflow",
-        "record_write_required", "unavailable_data",
-    ]
-
-
 class ExtractedResource(BaseModel):
     model_config = ConfigDict(extra="forbid")
     resource_type: ResourceType
@@ -131,7 +176,8 @@ def validate_result(
             data=record.data, provenance=SourceRecord(source={
                 "local-files": f"local-file:{record.evidence_file_id}",
                 "sql-desktop": "sql-desktop-observed",
-            }.get(source, "epic-browser-observed")),
+                "pacs-viewer": "pacs-viewer-observed",
+            }.get(source, "emr-browser-observed")),
         ))
     return output
 
@@ -155,18 +201,24 @@ class CopilotSkillRunner:
         self._require_runtime_token = require_runtime_token
 
     def retrieve(
-        self, skill: Literal["epic-browser", "local-files", "sql-desktop"], patient_id: str,
-        resources: list[ResourceType], catalog: FileCatalog | None = None,
+        self, skill: Literal["emr-browser", "pacs-viewer", "local-files", "sql-desktop"],
+        patient_id: str, resources: list[ResourceType], catalog: FileCatalog | None = None,
+        *, instruction: str | None = None, patient_name: str | None = None,
     ) -> ClinicalBundle:
-        if skill not in {"epic-browser", "local-files", "sql-desktop"}:
+        if skill not in SKILLS:
             raise ValueError("Unknown retrieval skill.")
         if skill == "local-files" and catalog is None:
             raise ValueError("The local-file skill requires an approved catalog.")
         # All sync Playwright lifecycle/actions stay on this single non-event-loop thread.
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix="epic-skill") as executor:
-            return asyncio.run(self._retrieve(skill, patient_id, resources, catalog, executor))
+            return asyncio.run(self._retrieve(
+                skill, patient_id, resources, catalog, executor, instruction, patient_name,
+            ))
 
-    async def _retrieve(self, skill, patient_id, resources, catalog, executor) -> ClinicalBundle:
+    async def _retrieve(
+        self, skill, patient_id, resources, catalog, executor, instruction=None,
+        patient_name=None,
+    ) -> ClinicalBundle:
         loop = asyncio.get_running_loop()
         browser = None
         desktop = None
@@ -182,6 +234,13 @@ class CopilotSkillRunner:
         recoveries = 0
         lock = asyncio.Lock()
         trace = Trace(self.settings.diagnostics_dir, skill)
+        typeable = {patient_id, *([patient_name] if patient_name else [])}
+        message = {
+            **({"instruction": instruction} if instruction else {}),
+            **({"patient_name": patient_name} if patient_name else {}),
+            "patient_id": patient_id,
+            "resources": [item.value for item in resources],
+        }
         trace.event("request", patient_id=patient_id, resources=[r.value for r in resources])
 
         async def browser_action(name, values):
@@ -274,7 +333,7 @@ class CopilotSkillRunner:
                             f"Skill stopped without verified data: {values.reason}."
                         )
                     if name == "finish":
-                        if skill == "epic-browser" and (browser is None or not values.resources):
+                        if skill in BROWSER_SKILLS and (browser is None or not values.resources):
                             raise ValueError("Browser extraction needs observed resources.")
                         if skill == "sql-desktop" and (
                             desktop is None or not values.resources
@@ -337,8 +396,10 @@ class CopilotSkillRunner:
                                 mime_type=record.media_type,
                             )] if image is not None else None,
                         )
-                    if name == "type_text" and values.text != patient_id:
-                        raise ValueError("Only the exact patient identifier may be typed.")
+                    if name == "type_text" and values.text not in typeable:
+                        raise ValueError(
+                            "Only the exact patient name or identifier may be typed."
+                        )
                     if name == "run_query":
                         try:
                             validate_select(values.sql)
@@ -380,20 +441,19 @@ class CopilotSkillRunner:
                 handler=handler, skip_permission=True, defer="never", is_terminal=terminal,
             )
 
-        stop_schema = (
-            PersonalPortalStop
-            if skill == "epic-browser" and self.settings.personal_portal_enabled
-            else Stop
-        )
         tools = [
             make_tool("finish", "Return only verified requested resources.", Extraction),
-            make_tool("stop", "Stop safely without returning clinical data.", stop_schema),
+            make_tool("stop", "Stop safely without returning clinical data.", Stop),
         ]
-        if skill == "epic-browser":
+        if skill in BROWSER_SKILLS:
             tools += [
-                make_tool("observe", "Observe the approved Epic tab.", Arguments),
-                make_tool("click", "Click read-only chart navigation.", Click),
-                make_tool("type_text", "Type the exact identifier in patient search.", TypeText),
+                make_tool("observe", "Observe the approved clinical workstation tab.", Arguments),
+                make_tool("click", "Click read-only navigation on the workstation page.", Click),
+                make_tool(
+                    "type_text",
+                    "Type the exact requested patient name or identifier into a search box.",
+                    TypeText,
+                ),
                 make_tool("press_key", "Use a permitted basic key.", PressKey),
                 make_tool("scroll", "Scroll the chart at most 1000 pixels.", Scroll),
             ]
@@ -401,15 +461,15 @@ class CopilotSkillRunner:
             tools += [
                 make_tool(
                     "observe",
-                    "Open SSMS connected to localhost OncologiaDemo, or observe it.",
+                    "Open SSMS connected to the local database, or observe it.",
                     Arguments,
                 ),
                 make_tool("click", "Click within the approved SSMS window.", Click),
                 make_tool(
                     "run_query",
                     "Replace the SSMS editor text with ONE read-only SELECT/WITH "
-                    "query on OncologiaDemo (schema oncologia_demo), run it with "
-                    "F5 and return a screenshot of the results grid.",
+                    "query on the local database, run it with F5 and return a "
+                    "screenshot of the results grid.",
                     RunQuery,
                 ),
                 make_tool(
@@ -463,51 +523,15 @@ class CopilotSkillRunner:
                     enable_remote_sessions=False, log_level="error",
                 ) as client:
                     agent_prompt = (
-                        "Follow the preloaded retrieval skill. "
-                        "Finish only via the finish tool."
+                        "You are the Data Retrieval Agent of Ospedale di Montalcino. "
+                        "The request states the task and the patient, never where the "
+                        "data is: discover it with the preloaded skill. Verify the "
+                        "patient on screen (name plus identifier or date of birth) "
+                        "before reading data. Finish only via the finish tool."
                     )
-                    if skill == "epic-browser" and self.settings.synthetic_portal_enabled:
-                        agent_prompt += (
-                            " The approved page is an explicitly labelled synthetic "
-                            "training portal. Observe it and read the large REQUESTED "
-                            "SYNTHETIC PATIENT identity panel. The exact matching Patient "
-                            "ID in that panel completes identity verification. Then click "
-                            "Uitslagen, click Bloedonderzoek, read the "
-                            "visible requested observations, and finish with only those "
-                            "observed values. This synthetic path is supported and does "
-                            "not require patient search."
-                        )
-                    elif skill == "epic-browser" and self.settings.personal_portal_enabled:
-                        agent_prompt += (
-                            " The approved browser is the operator's explicitly opted-in "
-                            "personal patient portal session. The operator's completed "
-                            "authentication and this explicit configuration are the "
-                            "identity verification for patient_id SELF. Do not search for "
-                            "another patient or require an on-screen patient identifier. "
-                            "Treat the current authenticated "
-                            "account as SELF. You MUST navigate: click Uitslagen, "
-                            "open the result entries one by one with click, read "
-                            "each value, and only call finish after you have "
-                            "collected five observed values (or the list is "
-                            "exhausted). Never call finish with an empty list."
-                        )
-                    elif skill == "sql-desktop":
-                        agent_prompt += (
-                            " Use observe to open SSMS on the local OncologiaDemo "
-                            "database, write read-only SELECT queries with run_query "
-                            "against the Italian oncologia_demo schema, read the "
-                            "results grid from the screenshots, translate the rows "
-                            "to FHIR-compatible resources, and finish."
-                        )
-                    elif skill == "local-files":
-                        agent_prompt += (
-                            " List the Desktop assets folder, open the ECG image, "
-                            "transcribe only the objective data printed or clearly "
-                            "visible on it (no own interpretation) as described in "
-                            "the skill, and finish with a preliminary "
-                            "DiagnosticReport plus one Observation per printed "
-                            "measurement when observations are requested."
-                        )
+                    agent_prompt += SKILL_PROMPTS[skill]
+                    if self.settings.navigation_hints:
+                        agent_prompt += NAVIGATION_HINTS[skill]
                     session = await client.create_session(
                         model=self.settings.model_deployment, provider=provider,
                         reasoning_effort=self.settings.reasoning_effort,
@@ -558,10 +582,8 @@ class CopilotSkillRunner:
                         session.on(record)
                     try:
                         limit = self.settings.skill_timeout_seconds
-                        await asyncio.wait_for(session.send_and_wait(json.dumps({
-                            "patient_id": patient_id,
-                            "resources": [item.value for item in resources],
-                        }), timeout=limit), timeout=limit + 5)
+                        await asyncio.wait_for(session.send_and_wait(json.dumps(message),
+                                               timeout=limit), timeout=limit + 5)
                         if failure is not None:
                             raise failure
                         if result is None:

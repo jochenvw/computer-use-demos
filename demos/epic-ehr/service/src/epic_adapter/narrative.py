@@ -7,7 +7,7 @@ from typing import Any
 from .models import ClinicalResource, ResourceType
 
 STOP_REASONS = {
-    "session_expired": "the portal session has expired – please log in again",
+    "session_expired": "the EMR session has expired – please sign in again",
     "rdp_minimized": "the remote desktop window is minimized or disconnected, so the screen cannot be used",
 }
 
@@ -21,7 +21,7 @@ def describe_step(skill: str, name: str, values: dict[str, Any], files: dict | N
         reason = str(values.get("reason", ""))
         return "warn", "Agent stopped: " + STOP_REASONS.get(reason, reason.replace("_", " "))
     if name == "list_patient_files":
-        return "step", "Searching the Desktop 'assets' folder for clinical documents"
+        return "step", "Searching the approved clinical file folders on this workstation"
     if name == "open_patient_file":
         record = (files or {}).get(values.get("file_id"))
         label = f"'{record.name}'" if record is not None else "a file"
@@ -29,7 +29,7 @@ def describe_step(skill: str, name: str, values: dict[str, Any], files: dict | N
     if name == "run_query":
         sql = " ".join(str(values.get("sql", "")).split())
         return "query", f"Writing and running SQL in SSMS: {sql}"
-    surface = "SSMS" if skill == "sql-desktop" else "the patient portal"
+    surface = {"sql-desktop": "SSMS", "pacs-viewer": "PACS"}.get(skill, "the EMR")
     if name == "observe":
         if skill == "sql-desktop" and first_observe:
             return "step", "Opening SQL Server Management Studio on database OncologiaDemo"
@@ -42,7 +42,7 @@ def describe_step(skill: str, name: str, values: dict[str, Any], files: dict | N
     if name == "press_key":
         return "step", f"Pressing {values.get('key')} in {surface}"
     if name == "type_text":
-        return "step", "Typing the patient identifier"
+        return "step", "Typing the patient name or identifier into the search box"
     return None
 
 
@@ -94,6 +94,10 @@ def summarize(resource: ClinicalResource) -> str:
         when = str(data.get("effectiveDateTime") or "")[:10]
         text = f"{label}: {_value(data) or 'see source'}"
         return f"{text} ({when})" if when else text
+    if kind == ResourceType.imaging:
+        study = _concept(data.get("code"))
+        conclusion = str(data.get("conclusion") or "recorded")
+        return f"Imaging report ({study}): {conclusion}" if study else f"Imaging report: {conclusion}"
     if kind == ResourceType.ecg:
         return "ECG report: " + str(data.get("conclusion") or _concept(data.get("code")) or "recorded")
     if kind == ResourceType.encounters:

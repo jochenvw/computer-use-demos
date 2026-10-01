@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..models import ClinicalResource, ResourceType, SourceRecord
+from ..models import ClinicalBundle, ClinicalResource, ResourceType, SourceRecord
 from ..file_catalog import SAFE_PATIENT_ID
 
 
@@ -12,7 +12,7 @@ class FixtureEpicAdapter:
         self._patient_root = fixture_root / "patients"
 
     def retrieve(
-        self, patient_id: str, resources: list[ResourceType]
+        self, patient_id: str, resources: list[ResourceType], **_request,
     ) -> list[ClinicalResource]:
         if not SAFE_PATIENT_ID.fullmatch(patient_id):
             raise ValueError("Invalid patient identifier.")
@@ -31,7 +31,15 @@ class FixtureEpicAdapter:
                         resource_type=resource_type,
                         source_id=str(value.get("id", f"{resource_type.value}-{index}")),
                         data=value,
-                        provenance=SourceRecord(source="synthetic-epic-fixture"),
+                        provenance=SourceRecord(source="synthetic-fixture"),
                     )
                 )
         return selected
+
+    def bundle(
+        self, patient_id: str, resources: list[ResourceType], **_request,
+    ) -> ClinicalBundle:
+        """Offline stand-in for the PACS and local-database agents."""
+        return ClinicalBundle(
+            patient_id=patient_id, resources=self.retrieve(patient_id, resources), files=[],
+        )
