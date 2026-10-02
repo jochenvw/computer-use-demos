@@ -3,6 +3,8 @@
 **Retrieves patient data from any system on this workstation, maps it to the
 requested data standard, and shares it with the requesting hospital.**
 
+![Scenario 2 on the demo VM: the agent console (left) transcribes Anna Ricci's MRI and CT reports from MontalcinoPACS (right) into English and hands them over to the MDT in Utrecht](docs/pacs-run.jpg)
+
 An AI agent that **uses a hospital workstation the way a person does**: it looks
 at the screen, clicks, types, and reads. It then returns what it found as
 structured data in the format you choose.
