@@ -42,6 +42,12 @@ class TesterTests(unittest.TestCase):
         for sctid in ("441689006", "60267001", "40939009", "241622002"):
             self.assertIn(sctid, schema["exampleConcepts"])
 
+    def test_custom_schema_box_only_shows_for_custom_format(self):
+        page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
+        self.assertIn('<label id="schemaBox" hidden', page)
+        self.assertIn('function syncFormat(){const v=$("format").value;$("schemaBox").hidden=v!=="custom";', page)
+        self.assertIn('$("format").onchange=()=>syncFormat();', page)
+
     def test_packaged_ui_has_required_safe_request_mapping(self):
         page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
         self.assertIn('let csrf="CSRF_TOKEN"', page)

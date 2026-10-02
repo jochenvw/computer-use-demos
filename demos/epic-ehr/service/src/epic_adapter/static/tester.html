@@ -310,7 +310,7 @@ $("emrScenario").onclick=()=>runScenario("emrScenario","TUS-2026-0417","ehr",["p
 $("pacsScenario").onclick=()=>runScenario("pacsScenario","TUS-2026-0417","pacs",["imaging"]);
 $("sqlScenario").onclick=()=>runScenario("sqlScenario","TUS-2026-0417","sql",["patient","observations"]);
 $("source").onchange=()=>showSkill($("source").value);
-$("format").onchange=()=>{$("schemaBox").hidden=$("format").value!=="custom";syncFormat()};
+$("format").onchange=()=>syncFormat();
 $("reformat").onclick=async()=>{if(!job||pending)return;let g=generation;try{set("Loading");let z=await fetchResult(g);$("output").textContent=render(z.body);set("Complete")}catch(e){if(e.name!=="AbortError")set(e.message,true)}};
 $("cancel").onclick=()=>cancel();
 $("clear").onclick=()=>{cancel("Idle");ids.forEach(x=>$(x).value="");job="";$("codes").value="";$("contextScenario").textContent="Transfer Montalcino \u{2192} UMC Utrecht";$("ask").value="";clearResults();placeholder($("timeline"),"Pick a scenario above \u{2013} every step the agent takes appears here live.");$("nowStep").textContent="Pick a source to start.";$("pipeSource").textContent=PIPE_SOURCES.none;scenarioIds.forEach(x=>$(x).classList.remove("active"));setAct("ask")};
@@ -318,7 +318,7 @@ addEventListener("pagehide",()=>$("clear").click());
 const PIPE_SOURCES={ehr:"EMR (SanitaCartella)",pacs:"PACS (MRI and report)",sql:"Local Italian database",files:"ECG file (fallback)",both:"EMR and files",none:"EMR \u{B7} PACS \u{B7} database"};
 const CHIP_LABELS={fhir:"FHIR R4",omop:"OMOP",json:"JSON","fhir-xml":"FHIR XML",hl7:"HL7 v2",ndjson:"NDJSON",custom:"Custom schema"};
 const isStage=()=>document.documentElement.classList.contains("stage");
-function syncFormat(){const v=$("format").value;if(!$("handover").hidden)showHandover();$("pipeFormat").textContent=$("format").selectedOptions[0].textContent.replace("\u{2026}","");$("formatChips").querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.format===v)))}
+function syncFormat(){const v=$("format").value;$("schemaBox").hidden=v!=="custom";if(!$("handover").hidden)showHandover();$("pipeFormat").textContent=$("format").selectedOptions[0].textContent.replace("\u{2026}","");$("formatChips").querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",String(c.dataset.format===v)))}
 function pickFormat(v){$("format").value=v;$("format").onchange();if(job&&!pending)$("reformat").click()}
 $("formatChips").replaceChildren(...[...$("format").options].map(o=>{let b=document.createElement("button");b.type="button";b.className="chip";b.dataset.format=o.value;b.textContent=CHIP_LABELS[o.value]||o.textContent;b.onclick=()=>pickFormat(o.value);return b}));
 function setDetails(show){document.documentElement.classList.toggle("compact",isStage()&&!show);$("detailsToggle").setAttribute("aria-pressed",String(show))}
