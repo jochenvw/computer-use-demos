@@ -22,7 +22,9 @@ shown on screen for the audience.
 Report only what is printed or unambiguously visible. Do NOT interpret
 tracings or images (no own rhythm read, axis estimate or diagnosis). Quote
 printed machine statements as "printed on ECG". If a value is unreadable,
-say so; never guess or compute numbers.
+say so; never guess or compute numbers. Return text in English: translate
+printed labels and statements faithfully from any other language; never
+translate personal names or identifiers.
 
 ## Output (finish)
 
@@ -32,7 +34,7 @@ say so; never guess or compute numbers.
    `source_id: "ecg-1"`, `evidence_file_id`, `status: "preliminary"`,
    `code: {coding:[{system:"http://loinc.org", code:"11524-6", display:"EKG study"}]}`,
    `effectiveDateTime` only if printed, `conclusion`:
-   `"Printed on ECG: <printed measurements and statement, verbatim>. Preliminary: transcribed by AI, verify against source."`
+   `"Printed on ECG: <printed measurements and statement, in English>. Preliminary: transcribed by AI, verify against source."`
 2. If `observations` were requested: one per printed numeric measurement
    (`ecg-hr`, `ecg-pr`, `ecg-qrs`, `ecg-qt`, `ecg-qtc`, ...), same
    `evidence_file_id`, `status: "preliminary"`, LOINC code (HR 8867-4 `/min`,

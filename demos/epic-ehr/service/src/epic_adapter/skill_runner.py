@@ -41,26 +41,36 @@ TRANSCRIBE = (
     "DiagnosticReport with status preliminary and a conclusion that ends with "
     "'Preliminary: transcribed by AI, verify against source.'"
 )
+ENGLISH_OUTPUT = (
+    " Output language: English. Translate all clinical information and "
+    "terminology you return (test and study names, encounter, note and report "
+    "types, note and report text, units written as words) faithfully from "
+    "Italian or any other source language into English, adding or omitting "
+    "nothing. Never translate personal names, organisation or product names, "
+    "identifiers, accession numbers or codes, and keep every number, unit "
+    "symbol and date exactly as shown. Prefix a translated report conclusion "
+    "with 'Report text (translated from <language>):'."
+)
 SKILL_PROMPTS = {
     "emr-browser": (
         " Explore the clinician EMR in the approved browser tab with observe, "
         "click and type_text, find the requested patient, and read the "
-        "requested data from the chart." + TRANSCRIBE
+        "requested data from the chart." + TRANSCRIBE + ENGLISH_OUTPUT
     ),
     "pacs-viewer": (
         " Explore the imaging (PACS) application in the approved browser tab, "
         "find the requested patient's studies, look at the images, and read the "
-        "radiology report." + TRANSCRIBE
+        "radiology report." + TRANSCRIBE + ENGLISH_OUTPUT
     ),
     "sql-desktop": (
         " Use observe to open SSMS on the local database, discover the schema "
         "with read-only SELECT queries (INFORMATION_SCHEMA), find the patient, "
         "read the result grids from screenshots, map the rows to FHIR-compatible "
-        "resources, and finish."
+        "resources, and finish." + ENGLISH_OUTPUT
     ),
     "local-files": (
         " List the approved patient files, open the relevant ones, and finish "
-        "with what they contain." + TRANSCRIBE
+        "with what they contain." + TRANSCRIBE + ENGLISH_OUTPUT
     ),
 }
 # Operator fallback only (EPIC_NAVIGATION_HINTS=1); off by default so the agent

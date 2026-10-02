@@ -26,9 +26,12 @@ click the input first, then `press_key` `Enter`), `press_key`, `scroll`,
 
 ## Safety - transcription only
 
-- Transcribe the report text verbatim (source language is fine; an English
-  rendering may follow in brackets). Do NOT describe the images yourself,
-  do NOT add findings, measurements or a diagnosis that are not printed.
+- Translate the printed report text faithfully into English, sentence by
+  sentence, keeping every measurement and anatomical location exactly. Do
+  NOT describe the images yourself, do NOT add findings, measurements or a
+  diagnosis that are not printed.
+- Never translate personal names, hospital or product names, accession
+  numbers or codes.
 - Mark every report preliminary.
 
 ## Output (finish)
@@ -39,12 +42,13 @@ read (FHIR R4 DiagnosticReport, without `resourceType`):
 - `source_id`: the accession number shown.
 - `status: "preliminary"`.
 - `code: {coding:[{system:"http://loinc.org", code:"18748-4",
-  display:"Diagnostic imaging study"}], text: <study description as shown>}`.
+  display:"Diagnostic imaging study"}], text: <study description in English>}`.
 - `identifier: [{system:"urn:pacs:accession", value: <accession>}]`.
 - `effectiveDateTime` as shown (ISO 8601); `performer[{display}]` = reporting
   radiologist when printed.
-- `conclusion`: `"Report text: <verbatim conclusion>. Preliminary: transcribed
-  by AI, verify against source."` - it MUST end with exactly
+- `conclusion`: `"Report text (translated from <language>): <conclusion in
+  English>. Preliminary: transcribed by AI, verify against source."` (drop
+  the bracket if the report is already English) - it MUST end with exactly
   `Preliminary: transcribed by AI, verify against source.`
 
 Never interpret pixels clinically. Synthetic training data only.

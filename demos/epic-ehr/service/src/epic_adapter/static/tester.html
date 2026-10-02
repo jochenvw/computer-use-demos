@@ -203,7 +203,7 @@ html.stage .ask-box input{font-size:24px}html.stage .handover{font-size:20px}
 <button id="reformat" class="secondary">Show last result in this format</button></div>
 <label id="schemaBox" hidden style="margin-top:12px">Target schema / ontology &#x2013; SNOMED CT by default; replace with any JSON schema, example or description<textarea id="schema" rows="12" spellcheck="false">{
  "standard": "SNOMED CT International Edition (http://snomed.info/sct)",
- "rules": "Use active SNOMED CT concept IDs (SCTID) with their preferred term. If no confident match, set sctid to null - never invent codes. Units in UCUM. Copy report text verbatim, add no diagnosis.",
+ "rules": "Use active SNOMED CT concept IDs (SCTID) with their preferred term. If no confident match, set sctid to null - never invent codes. Units in UCUM. All text in English: translate terms, notes and report text faithfully from the source language, never translate names or identifiers, add no diagnosis.",
  "patient": {
   "id": "string",
   "name": "string",

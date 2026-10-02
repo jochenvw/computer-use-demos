@@ -28,7 +28,7 @@
       },
       "type": [
         {
-          "text": "Ricovero da Pronto Soccorso - Chirurgia Generale"
+          "text": "Admission via Emergency Department - General Surgery"
         }
       ],
       "subject": {
@@ -199,7 +199,7 @@
             "display": "Hemoglobin [Mass/volume] in Blood"
           }
         ],
-        "text": "Emoglobina"
+        "text": "Hemoglobin"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -311,7 +311,7 @@
             "display": "Leukocytes [#/volume] in Blood by Automated count"
           }
         ],
-        "text": "Leucociti"
+        "text": "Leukocytes"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -357,7 +357,7 @@
             "display": "Platelets [#/volume] in Blood by Automated count"
           }
         ],
-        "text": "Piastrine"
+        "text": "Platelets"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -413,7 +413,7 @@
             "display": "Creatinine [Mass/volume] in Serum or Plasma"
           }
         ],
-        "text": "Creatinina"
+        "text": "Creatinine"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -459,7 +459,7 @@
             "display": "C reactive protein [Mass/volume] in Serum or Plasma"
           }
         ],
-        "text": "Proteina C reattiva"
+        "text": "C-reactive protein"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -511,7 +511,7 @@
             "display": "Ferritin [Mass/volume] in Serum or Plasma"
           }
         ],
-        "text": "Ferritina"
+        "text": "Ferritin"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -671,7 +671,7 @@
             "display": "Hemoglobin [Mass/volume] in Blood"
           }
         ],
-        "text": "Emoglobina"
+        "text": "Hemoglobin"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -716,14 +716,14 @@
       },
       "date": "2026-09-18T22:40:00+02:00",
       "type": {
-        "text": "Verbale Pronto Soccorso"
+        "text": "Emergency department report"
       },
       "author": [
         {
           "display": "Dr.ssa C. Neri"
         }
       ],
-      "description": "Verbale Pronto Soccorso: Sincope durante passeggiata; PA 98/60, FC 104, Hb 8.1 g/dL; ricovero in Chirurgia Generale.",
+      "description": "Emergency department report: Syncope while out walking; BP 98/60, HR 104, Hb 8.1 g/dL; admitted to General Surgery.",
       "content": []
     },
     {
@@ -734,14 +734,14 @@
       },
       "date": "2026-09-19T12:10:00+02:00",
       "type": {
-        "text": "Consulenza chirurgica"
+        "text": "Surgical consultation"
       },
       "author": [
         {
           "display": "Dr. M. Bellini"
         }
       ],
-      "description": "Consulenza chirurgica: Colonscopia: neoformazione stenosante del sigma, biopsie; non occlusione; trasfuse 2 unita' EC.",
+      "description": "Surgical consultation: Colonoscopy: stenosing mass of the sigmoid colon, biopsies taken; no obstruction; 2 units of packed red blood cells transfused.",
       "content": []
     },
     {
@@ -752,14 +752,14 @@
       },
       "date": "2026-09-22T10:30:00+02:00",
       "type": {
-        "text": "Consulenza oncologica"
+        "text": "Oncology consultation"
       },
       "author": [
         {
           "display": "Dr.ssa L. Santoro"
         }
       ],
-      "description": "Consulenza oncologica: Adenocarcinoma G2; due lesioni epatiche sospette; biomarcatori richiesti; indicata discussione MDT.",
+      "description": "Oncology consultation: Adenocarcinoma G2; two suspicious liver lesions; biomarkers requested; MDT discussion indicated.",
       "content": []
     },
     {
@@ -770,14 +770,14 @@
       },
       "date": "2026-09-23T09:00:00+02:00",
       "type": {
-        "text": "Lettera di trasferimento"
+        "text": "Transfer letter"
       },
       "author": [
         {
           "display": "Dr. M. Bellini"
         }
       ],
-      "description": "Lettera di trasferimento: Paziente stabile, trasferita presso UMC Utrecht (NL).",
+      "description": "Transfer letter: Patient stable, transferred to UMC Utrecht (NL).",
       "content": []
     }
   ],
@@ -793,7 +793,7 @@
             "display": "Diagnostic imaging study"
           }
         ],
-        "text": "RM fegato senza e con mdc"
+        "text": "MRI liver without and with contrast"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -810,7 +810,7 @@
           "display": "Dott.ssa Elena Fabbri"
         }
       ],
-      "conclusion": "Report text: two liver lesions (segment VII 22 mm, segment IVa 14 mm) compatible with secondary lesions; multidisciplinary discussion advised. Preliminary: transcribed by AI, verify against source."
+      "conclusion": "Report text (translated from Italian): two liver lesions (segment VII 22 mm, segment IVa 14 mm) compatible with secondary lesions; multidisciplinary discussion advised. Preliminary: transcribed by AI, verify against source."
     },
     {
       "id": "imaging-anna-ct",
@@ -823,7 +823,7 @@
             "display": "Diagnostic imaging study"
           }
         ],
-        "text": "TC torace-addome con mdc"
+        "text": "CT chest-abdomen with contrast"
       },
       "subject": {
         "reference": "Patient/TUS-2026-0417"
@@ -840,7 +840,7 @@
           "display": "Dott. Andrea Lupi"
         }
       ],
-      "conclusion": "Report text: stenosing sigmoid mass with locoregional lymphadenopathy; liver lesions to be characterised by MRI. Preliminary: transcribed by AI, verify against source."
+      "conclusion": "Report text (translated from Italian): stenosing sigmoid mass with locoregional lymphadenopathy; liver lesions to be characterised by MRI. Preliminary: transcribed by AI, verify against source."
     }
   ],
   "ecg": [

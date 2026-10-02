@@ -247,6 +247,18 @@ class ComputerUseTests(unittest.TestCase):
             "patient_name": "Anna Ricci", "patient_id": "TUS-2026-0417",
             "resources": ["patient"],
         }, self.client.prompt)
+        self.assertIn("Output language: English", prompt)
+        self.assertIn("Never translate personal names", prompt)
+
+    def test_every_skill_returns_english_but_keeps_names_and_codes(self):
+        from epic_adapter.skill_runner import ENGLISH_OUTPUT, SKILL_PROMPTS
+        from epic_adapter.tester import packaged_skill_instructions
+        for skill, text in SKILL_PROMPTS.items():
+            self.assertIn(ENGLISH_OUTPUT, text, skill)
+        for skill, text in packaged_skill_instructions().items():
+            self.assertIn("English", text, skill)
+            self.assertNotIn("source-language", text, skill)
+            self.assertNotIn("source language is fine", text, skill)
 
     def test_navigation_hints_are_operator_opt_in(self):
         adapter = self.build(

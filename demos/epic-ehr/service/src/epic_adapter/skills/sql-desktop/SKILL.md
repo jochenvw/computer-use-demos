@@ -45,11 +45,14 @@ returns the reason: fix it and retry. Click in the editor if focus was lost.
   `birthDate`.
 - `observations` (one per row): `status: "final"`, `category` laboratory or
   vital-signs, `code{coding:[{system:"urn:local-db:code", code, display}],
-  text}` keeping source-language text, `subject.reference:"Patient/<MRN>"`,
+  text}` with `display` and `text` translated into English (keep the source
+  `code` as is), `subject.reference:"Patient/<MRN>"`,
   `effectiveDateTime`, `valueQuantity{value, unit}`, `referenceRange`,
   `interpretation` when present. Add LOINC only when certain (haemoglobin
   718-7, creatinine 2160-0, leukocytes 6690-2, platelets 777-3, CEA 2039-6,
   CA 19-9 24108-3, heart rate 8867-4).
 
 Only report values visible in the grid. Never infer diagnoses or fill gaps.
+Return all terminology in English; never translate personal names or
+identifiers.
 Synthetic training data only.

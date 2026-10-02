@@ -50,6 +50,23 @@ class AnnaFixtureTests(unittest.TestCase):
         self.assertLessEqual({("Emoglobina", "8.1"), ("CEA", "18.4"), ("CA 19-9", "41")},
                              emr_values)
 
+    def test_fixture_output_is_english_except_names(self):
+        data = json.loads((FIXTURES / "patients" / "TUS-2026-0417.json").read_text(encoding="utf-8"))
+        text = json.dumps(data, ensure_ascii=False)
+        for italian in ("Emoglobina", "Leucociti", "Piastrine", "Creatinina", "reattiva",
+                        "Ferritina", "Ricovero", "Chirurgia", "Pronto Soccorso", "Consulenza",
+                        "Lettera", "Sincope", "sigma", "lesioni", "fegato", "torace", "mdc",
+                        "trasferita", "stabile"):
+            self.assertNotIn(italian, text)
+        labels = {item.data["code"].get("text") for item in self.by_type(ResourceType.observations)}
+        self.assertLessEqual({"Hemoglobin", "Ferritin", "C-reactive protein", "CEA"}, labels)
+        # Names of people and the hospital are never translated.
+        self.assertIn("Dott.ssa Elena Fabbri", text)
+        self.assertIn("Ospedale di Montalcino", text)
+        for report in self.by_type(ResourceType.imaging):
+            self.assertTrue(report.data["conclusion"].startswith(
+                "Report text (translated from Italian):"))
+
     def test_imaging_is_preliminary_transcription_without_own_diagnosis(self):
         reports = self.by_type(ResourceType.imaging)
         self.assertEqual({"imaging-anna-mri", "imaging-anna-ct"},

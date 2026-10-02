@@ -69,6 +69,16 @@ then be switched without repeating the computer work: **FHIR**, **OMOP**, JSON,
 HL7 v2, or a **custom schema** (prefilled with a SNOMED CT example; replace it
 with any schema).
 
+**Output language is English.** The agent reads the Italian screens and
+translates all clinical information and terminology (test names, note and
+report text, study descriptions) faithfully into English, from Italian or any
+other source language. Personal names, hospital and product names,
+identifiers, codes, numbers, units and dates are never translated. Translated
+report conclusions start with *Report text (translated from Italian):* and
+still end with *Preliminary: transcribed by AI, verify against source.* The
+rule lives in `ENGLISH_OUTPUT` (`skill_runner.py`), the four `SKILL.md` files
+and the custom-schema mapper (`transform.py`).
+
 ### What you see during the demo
 
 1. **The workstation (remote desktop).** The EMR and PACS in Edge, SSMS for the

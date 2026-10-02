@@ -35,8 +35,11 @@ Stop reasons: `session_expired` (sign-in page), `patient_not_verified`,
 
 ## Output (finish)
 
-`patient_id` = the requested identifier. Keep source-language text in
-`display` / `text`; add LOINC only when certain.
+`patient_id` = the requested identifier. All text you return is English:
+translate test names, encounter and note types and note text faithfully from
+the source language (no additions, no omissions). Never translate personal
+names, hospital or product names, identifiers or codes; keep numbers, unit
+symbols and dates exactly. Add LOINC only when certain.
 
 - `patient`: `name[{family, given}]`, `gender`, `birthDate` (YYYY-MM-DD).
 - `encounters`: `status`, `class`, `period{start,end}`, `reasonCode` text,
@@ -45,7 +48,8 @@ Stop reasons: `session_expired` (sign-in page), `patient_not_verified`,
   `code{coding, text}`, `effectiveDateTime` (ISO 8601), `valueQuantity{value,
   unit}` or `valueString`, `referenceRange` and `interpretation` when shown.
 - `documents`: one per clinical note: `status: "current"`, `type.text`,
-  `date`, `description` = verbatim note text (shortened only with "...").
+  `date`, `description` = the note text translated faithfully into English
+  (shortened only with "...").
 - `imaging`: only if the chart shows a report text; otherwise leave imaging
   to the PACS skill.
 
