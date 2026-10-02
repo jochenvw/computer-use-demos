@@ -278,6 +278,10 @@ the legacy `epic`/`EPIC_` prefix so the VM, launcher and release tags keep worki
    .\browser.ps1 -EpicUrl http://127.0.0.1:8001/ -AllowLoopbackTraining
    ```
 
+   It opens a minimal Edge app window (`--app=`, maximized: no tabs, address
+   bar or toolbar); CDP still attaches to it. Add `-Tabbed` for a normal
+   browser window.
+
 2. Keep exactly one EMR tab open on the SanitaCartella worklist. For a real
    EMR, sign in manually with an authorized **read-only account**.
 3. Configure `.env`:

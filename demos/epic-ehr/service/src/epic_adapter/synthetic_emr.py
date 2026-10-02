@@ -18,7 +18,10 @@ PRODUCT = "SanitaCartella 4.2"
 HOSPITAL = "Ospedale di Montalcino"
 PACS_PRODUCT = "MontalcinoPACS Web 2.1"
 PAGE_TITLE = "Ospedale di Montalcino - Postazione clinica"
-BANNER = "SYNTHETIC TRAINING DATA - NOT A REAL PATIENT RECORD"
+SYNTHETIC_NOTICE = (
+    "Sistema di addestramento sintetico. Tutti i pazienti, i valori e le "
+    "immagini sono inventati. Nessun collegamento con sistemi ospedalieri reali."
+)
 OPERATOR = "DR.BELLINI (Chirurgia Generale)"
 ANNA_ID = "TUS-2026-0417"
 
@@ -216,8 +219,6 @@ STUDIES: dict[str, dict] = {
 CSS = """
 body{margin:0;background:#d4d0c8;font:12px Tahoma,Verdana,Arial,sans-serif;color:#000}
 a{color:#00309c}a:visited{color:#00309c}
-.synthetic{background:repeating-linear-gradient(45deg,#ffd800 0 14px,#111 14px 28px);padding:3px}
-.synthetic div{background:#b00000;color:#fff;font:bold 15px Verdana,Arial,sans-serif;text-align:center;padding:5px;letter-spacing:1px}
 .titlebar{background:linear-gradient(90deg,#0a246a,#a6caf0);color:#fff;font-weight:bold;padding:4px 8px}
 .menubar{background:#d4d0c8;border-bottom:1px solid #808080;padding:3px 6px}
 .menubar a,.menubar span{margin-right:14px;color:#000;text-decoration:none}
@@ -277,13 +278,11 @@ def _page(body: str, *, pacs: bool = False, app: str = "emr") -> bytes:
         '<!doctype html><html lang="it"><head><meta charset="utf-8">'
         f"<title>{esc(PAGE_TITLE)}</title><style>{CSS}</style></head>"
         f'<body class="{"pacs" if pacs else ""}">'
-        f'<div class="synthetic"><div>{BANNER}</div></div>'
         f'<div class="titlebar">{esc(title)} - {HOSPITAL} - utente: {OPERATOR}</div>'
         '<div class="menubar"><span>File</span><span>Modifica</span><span>Visualizza</span>'
         '<span>Strumenti</span><span>Finestra</span><span>?</span></div>'
         f'{apps}<div class="wrap">{body}'
-        '<p class="foot">Sistema di addestramento sintetico. Tutti i pazienti, i valori e le '
-        'immagini sono inventati. Nessun collegamento con sistemi ospedalieri reali.</p>'
+        f'<p class="foot">{SYNTHETIC_NOTICE}</p>'
         '</div><div class="status">Pronto | Server: SCART-SRV01 | Postazione: '
         'CHIR-PC07 | Sola lettura</div></body></html>'
     )

@@ -7,7 +7,7 @@ from urllib.parse import quote
 from urllib.request import urlopen
 
 from epic_adapter import synthetic_emr
-from epic_adapter.synthetic_emr import Handler
+from epic_adapter.synthetic_emr import SYNTHETIC_NOTICE, Handler
 from epic_adapter.synthetic_portal import Handler as ShimHandler
 
 ANNA = "TUS-2026-0417"
@@ -32,7 +32,9 @@ class SyntheticEmrTests(unittest.TestCase):
             return response.status, dict(response.headers), response.read().decode()
 
     def assert_clean(self, page):
-        self.assertIn("SYNTHETIC TRAINING DATA - NOT A REAL PATIENT RECORD", page)
+        self.assertIn(SYNTHETIC_NOTICE, page)
+        self.assertNotIn("SYNTHETIC TRAINING DATA", page)
+        self.assertNotIn('class="synthetic"', page)
         for banned in ("Epic", "MyChart", "Mijn Dossier", "portal", "Portal", "fax",
                        "<script", "innerHTML", "http://", "https://"):
             self.assertFalse(banned in page, banned)
