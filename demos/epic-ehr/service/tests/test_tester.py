@@ -29,6 +29,19 @@ class TesterTests(unittest.TestCase):
         launcher = (Path(__file__).parents[2] / "start-demo.ps1").read_text(encoding="utf-8")
         self.assertIn("-Stage", launcher)
 
+    def test_custom_schema_defaults_to_editable_snomed_example(self):
+        import html
+        import re
+        page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
+        match = re.search(r'<textarea id="schema"[^>]*>(.*?)</textarea>', page, re.S)
+        self.assertIsNotNone(match)
+        self.assertNotIn("readonly", match.group(0).split(">")[0])
+        schema = json.loads(html.unescape(match.group(1)))
+        self.assertIn("SNOMED CT", schema["standard"])
+        self.assertIn("never invent codes", schema["rules"])
+        for sctid in ("441689006", "60267001", "40939009", "241622002"):
+            self.assertIn(sctid, schema["exampleConcepts"])
+
     def test_packaged_ui_has_required_safe_request_mapping(self):
         page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
         self.assertIn('let csrf="CSRF_TOKEN"', page)

@@ -29,7 +29,7 @@ all synthetic.
    queries.
 6. **Handover (each run).** Closing line: *Handing over to the MDT dashboard,
    UMC Utrecht, in the requested standard: FHIR, OMOP or a custom schema.*
-   Press `F` to cycle FHIR / OMOP / custom (Dutch schema) without rerunning.
+   Press `F` to cycle FHIR / OMOP / custom (SNOMED CT by default) without rerunning.
 
 Fallbacks: offline fixture mode runs all three scenarios with the same
 timeline; `EPIC_NAVIGATION_HINTS=1` if the live agent gets lost (invisible to

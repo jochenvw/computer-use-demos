@@ -201,7 +201,61 @@ html.stage .ask-box input{font-size:24px}html.stage .handover{font-size:20px}
 <section class="card" id="contract"><div class="panel"><div class="section-heading"><div><p class="eyebrow">OUTPUT CONTRACT</p><h2>Select the structured representation</h2></div></div><div class="row">
 <label>Return the data as<select id="format"><option value="fhir">FHIR R4 JSON</option><option value="omop">OMOP CDM JSON</option><option value="json">Normalized JSON</option><option value="fhir-xml">FHIR XML</option><option value="hl7">HL7 v2</option><option value="ndjson">NDJSON</option><option value="custom">Custom schema / ontology&#x2026;</option></select></label>
 <button id="reformat" class="secondary">Show last result in this format</button></div>
-<label id="schemaBox" hidden style="margin-top:12px">Target schema / ontology &#x2013; any JSON schema, example or description<textarea id="schema" rows="6">{"patient":{"id":"string","naam":"string","geslacht":"man|vrouw","geboortedatum":"YYYY-MM-DD"},"labuitslagen":[{"test_nl":"Nederlandse testnaam","loinc":"LOINC-code of null","waarde":"getal","eenheid":"UCUM-eenheid","datum":"ISO 8601","afwijkend":"true|false"}],"beeldvorming":[{"onderzoek":"string","datum":"ISO 8601","verslag_nl":"string","status":"voorlopig"}]}</textarea></label>
+<label id="schemaBox" hidden style="margin-top:12px">Target schema / ontology &#x2013; SNOMED CT by default; replace with any JSON schema, example or description<textarea id="schema" rows="12" spellcheck="false">{
+ "standard": "SNOMED CT International Edition (http://snomed.info/sct)",
+ "rules": "Use active SNOMED CT concept IDs (SCTID) with their preferred term. If no confident match, set sctid to null - never invent codes. Units in UCUM. Copy report text verbatim, add no diagnosis.",
+ "patient": {
+  "id": "string",
+  "name": "string",
+  "sex": {
+   "sctid": "248152002 | 248153007",
+   "term": "Female | Male"
+  },
+  "birthDate": "YYYY-MM-DD"
+ },
+ "observations": [
+  {
+   "sctid": "string|null",
+   "term": "string",
+   "sourceLabel": "original label in the source system",
+   "value": "number",
+   "unit": "UCUM",
+   "date": "ISO 8601"
+  }
+ ],
+ "imaging": [
+  {
+   "sctid": "string|null",
+   "term": "string",
+   "date": "ISO 8601",
+   "reportText": "string",
+   "status": "preliminary"
+  }
+ ],
+ "findings": [
+  {
+   "sctid": "string|null",
+   "term": "string",
+   "source": "report|note"
+  }
+ ],
+ "exampleConcepts": {
+  "441689006": "Measurement of total hemoglobin concentration",
+  "104133003": "Erythrocyte mean corpuscular volume determination",
+  "767002": "White blood cell count",
+  "61928009": "Platelet count",
+  "70901006": "Creatinine measurement",
+  "55235003": "C-reactive protein measurement",
+  "489004": "Ferritin measurement",
+  "60267001": "Carcinoembryonic antigen measurement",
+  "40939009": "Cancer antigen 19-9 measurement",
+  "364075005": "Heart rate",
+  "75367002": "Blood pressure",
+  "241622002": "MRI of liver",
+  "418891003": "CT of chest and abdomen",
+  "300332007": "Liver mass"
+ }
+}</textarea></label>
 </div></section>
 <section class="card" id="live"><div class="status"><div class="spinner"></div><b id="state" class="ok">Idle</b><span id="elapsed"></span><button id="cancel" class="secondary">Stop watching</button></div><div class="pulse"></div>
 <div class="cols"><div class="work-panel"><p class="eyebrow act">2 &#xB7; WATCH</p><p class="eyebrow">ACTIVITY STREAM</p><h2>The agent works in the Montalcino systems</h2><p class="now" id="nowStep" aria-live="polite">Pick a source to start.</p><div class="legend"><span>&#x1F4DD; task</span><span>&#x25B6; request</span><span>&#x25CB; step</span><span>&#x2026; reasoning</span><span>SQL query</span><span>&#x2713; result</span></div><ul id="timeline"><li class="empty" style="display:block">Pick a scenario above &#x2013; every step the agent takes appears here live.</li></ul></div>

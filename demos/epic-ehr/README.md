@@ -66,7 +66,8 @@ files`), a synthetic ECG summary for Anna.
 After each run the closing line reads: *Handing over to the MDT dashboard, UMC
 Utrecht, in the requested standard: FHIR, OMOP or a custom schema.* Output can
 then be switched without repeating the computer work: **FHIR**, **OMOP**, JSON,
-HL7 v2, or a **custom schema** (a Dutch example is prefilled).
+HL7 v2, or a **custom schema** (prefilled with a SNOMED CT example; replace it
+with any schema).
 
 ### What you see during the demo
 
@@ -489,7 +490,9 @@ Before the demo:
    (`tscon`) so it keeps rendering without any RDP client. Reconnecting RDP
    takes it back.
 5. Output: pick FHIR, OMOP, JSON, ... or **Custom schema / ontology** (paste any
-   JSON schema, example, or description; a Dutch example is prefilled).
+   JSON schema, example, or description). The default is a SNOMED CT
+   International Edition example: verified concept IDs for Anna's labs, imaging
+   and findings, `null` when no confident match, no invented codes.
    **Show last result in this format** re-renders the same job without rerunning
    computer use.
 
