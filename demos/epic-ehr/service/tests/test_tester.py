@@ -24,7 +24,8 @@ class TesterTests(unittest.TestCase):
     def test_stage_mode_is_presenter_ready(self):
         page = (Path(__file__).parents[1] / "src/epic_adapter/static/tester.html").read_text()
         for marker in ('id="pipeline"', 'id="nowStep"', 'id="formatChips"', 'id="stageToggle"',
-                       'id="detailsToggle"', 'id="receiveGrid"', 'get("mode") === "stage"', "html.compact"):
+                       'id="detailsToggle"', 'id="receiveGrid"', 'get("mode") === "stage"',
+                       "html.compact", "html.stage .hospital"):
             self.assertIn(marker, page)
         launcher = (Path(__file__).parents[2] / "start-demo.ps1").read_text(encoding="utf-8")
         self.assertIn("-Stage", launcher)
@@ -57,6 +58,16 @@ class TesterTests(unittest.TestCase):
         self.assertIn("<b>1 &#xB7; Clinical data from the EMR</b>", page)
         self.assertIn("<b>2 &#xB7; Medical imaging from PACS</b>", page)
         self.assertIn("<b>3 &#xB7; Local Italian database</b>", page)
+        self.assertIn('id="hospitals"', page)
+        self.assertIn('id="montalcinoHospital"', page)
+        self.assertIn('<span class="hospital-status online">Online</span>', page)
+        self.assertIn('<span class="hospital-status offline">Offline</span>', page)
+        self.assertIn('<span class="hospital-status unavailable">Unavailable</span>', page)
+        self.assertIn('id="sanVittoreHospital" class="hospital" disabled', page)
+        self.assertIn('id="santaLuciaHospital" class="hospital" disabled', page)
+        self.assertIn('id="scenarios" hidden', page)
+        self.assertIn("value||!hospitalConnected", page)
+        self.assertIn('const ACTS=["connect","ask","watch","receive"]', page)
         self.assertLess(page.index('id="emrScenario"'), page.index('id="pacsScenario"'))
         self.assertLess(page.index('id="pacsScenario"'), page.index('id="sqlScenario"'))
         self.assertIn("<title>Data Retrieval Agent - Ospedale di Montalcino</title>", page)

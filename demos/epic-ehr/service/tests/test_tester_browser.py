@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import threading
 import unittest
@@ -79,10 +80,33 @@ class TesterBrowserTests(unittest.TestCase):
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(channel="msedge", headless=True)
                 try:
-                    page = browser.new_page(accept_downloads=True)
+                    page = browser.new_page(
+                        accept_downloads=True, viewport={"width": 1440, "height": 900}
+                    )
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(f"http://127.0.0.1:{tester.server_port}")
+                    page.locator("#stageToggle").click()
+                    expect(page.locator("html")).to_have_class(
+                        re.compile(r"\bstage\b")
+                    )
+                    expect(page.locator("#montalcinoHospital")).to_be_visible()
+                    page.locator("#stageToggle").click()
+                    expect(page.locator("#scenarios")).to_be_hidden()
+                    expect(page.locator("#emrScenario")).to_be_disabled()
+                    expect(page.locator("#sanVittoreHospital")).to_be_disabled()
+                    expect(page.locator("#santaLuciaHospital")).to_be_disabled()
+                    page.keyboard.press("1")
+                    self.assertEqual([], requests)
+                    page.locator("#montalcinoHospital").click()
+                    expect(page.locator("#montalcinoHospital")).to_contain_text(
+                        "Connecting"
+                    )
+                    expect(page.locator("#scenarios")).to_be_visible()
+                    expect(page.locator("#connectedHospital")).to_contain_text(
+                        "Connected to Ospedale di Montalcino"
+                    )
+                    expect(page.locator("#emrScenario")).to_be_enabled()
                     page.locator("details:not(#skillPanel)").evaluate(
                         "element => element.open = true"
                     )
@@ -91,6 +115,7 @@ class TesterBrowserTests(unittest.TestCase):
                     page.locator("#emrScenario").click()
                     expect(page.locator("#skillName")).to_have_text("emr-browser")
                     expect(page.locator("#skillText")).to_contain_text("Clinician EMR")
+                    expect(page.locator("#connectedHospital")).to_be_visible()
                     expect(page.locator("#emrScenario")).to_be_disabled()
                     self.assertTrue(status_seen.wait(8))
                     expect(page.locator("#ask")).to_have_value(
