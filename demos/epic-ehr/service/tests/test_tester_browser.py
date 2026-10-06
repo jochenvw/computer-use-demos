@@ -91,6 +91,9 @@ class TesterBrowserTests(unittest.TestCase):
                         re.compile(r"\bstage\b")
                     )
                     expect(page.locator("#montalcinoHospital")).to_be_visible()
+                    expect(page.locator(".context-banner")).to_be_hidden()
+                    expect(page.locator("#pipeline")).to_be_hidden()
+                    expect(page.locator("#live")).to_be_hidden()
                     page.locator("#stageToggle").click()
                     expect(page.locator("#scenarios")).to_be_hidden()
                     expect(page.locator("#emrScenario")).to_be_disabled()
@@ -103,6 +106,10 @@ class TesterBrowserTests(unittest.TestCase):
                         "Connecting"
                     )
                     expect(page.locator("#scenarios")).to_be_visible()
+                    expect(page.locator("#hospitals")).to_be_hidden()
+                    expect(page.locator(".context-banner")).to_be_visible()
+                    expect(page.locator("#pipeline")).to_be_visible()
+                    expect(page.locator("#live")).to_be_visible()
                     expect(page.locator("#connectedHospital")).to_contain_text(
                         "Connected to Ospedale di Montalcino"
                     )
