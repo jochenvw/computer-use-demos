@@ -174,9 +174,12 @@ def validate_result(
     for record in result.resources:
         if record.resource_type not in requested:
             raise ValueError("The model returned an unrequested resource type.")
-        if "resourceType" in record.data or record.data.get("id", record.source_id) != record.source_id:
-            raise ValueError("Conflicting FHIR resource identity.")
         # Demo: the request defines the patient; the host assigns identity.
+        # Models sometimes return a complete FHIR-shaped object even though
+        # finish expects only its data fields. Discard redundant identity fields
+        # and let the trusted request/source_id define them during formatting.
+        record.data.pop("resourceType", None)
+        record.data.pop("id", None)
         if record.resource_type == ResourceType.patient:
             record.source_id = patient_id
         else:

@@ -200,6 +200,38 @@ class ComputerUseTests(unittest.TestCase):
             {"reference": "Patient/TUS-2026-0417"}, bundle[0].data["subject"]
         )
 
+    def test_host_normalizes_redundant_fhir_identity(self):
+        adapter = self.build([("observe", {}), ("finish", {
+            "patient_id": "TUS-2026-0417", "resources": [{
+                "resource_type": "patient", "source_id": "model-patient",
+                "data": {
+                    "resourceType": "Patient", "id": "conflicting-model-id",
+                    "name": [{"family": "Ricci", "given": ["Anna"]}],
+                },
+            }, {
+                "resource_type": "observations", "source_id": "lab-HB-1",
+                "data": {
+                    "resourceType": "Observation", "id": "different-id",
+                    "status": "final",
+                },
+            }],
+        })])
+        bundle = adapter.retrieve(
+            "TUS-2026-0417",
+            [ResourceType.patient, ResourceType.observations],
+        )
+        patient, observation = bundle
+        self.assertEqual("TUS-2026-0417", patient.source_id)
+        self.assertNotIn("resourceType", patient.data)
+        self.assertNotIn("id", patient.data)
+        self.assertEqual("lab-HB-1", observation.source_id)
+        self.assertNotIn("resourceType", observation.data)
+        self.assertNotIn("id", observation.data)
+        self.assertEqual(
+            {"reference": "Patient/TUS-2026-0417"},
+            observation.data["subject"],
+        )
+
     def test_model_cannot_type_arbitrary_text_or_recover_from_failure(self):
         adapter = self.build([
             ("type_text", {"text": "change prescription"}),
