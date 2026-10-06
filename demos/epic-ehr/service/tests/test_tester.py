@@ -110,6 +110,8 @@ class TesterTests(unittest.TestCase):
         self.assertIn("Clinician EMR", skills["emr-browser"])
         self.assertIn("Preliminary: transcribed by AI, verify against source.", skills["pacs-viewer"])
         self.assertIn("INFORMATION_SCHEMA", skills["sql-desktop"])
+        self.assertIn("compact patient-only query", skills["sql-desktop"])
+        self.assertIn("never use `SELECT *`", skills["sql-desktop"])
         self.assertIn("ECG", skills["local-files"])
         for text in skills.values():
             # Generic manuals: no patient, path, table or vendor hints.

@@ -64,9 +64,11 @@ SKILL_PROMPTS = {
     ),
     "sql-desktop": (
         " Use observe to open SSMS on the local database, discover the schema "
-        "with read-only SELECT queries (INFORMATION_SCHEMA), find the patient, "
-        "read the result grids from screenshots, map the rows to FHIR-compatible "
-        "resources, and finish." + ENGLISH_OUTPUT
+        "with read-only SELECT queries (INFORMATION_SCHEMA), then run a narrow "
+        "patient-only query filtered by the exact requested MRN. Verify the "
+        "single visible row using MRN and name plus date of birth before querying "
+        "clinical rows. Include the MRN in clinical result grids, map the visible "
+        "rows to FHIR-compatible resources, and finish." + ENGLISH_OUTPUT
     ),
     "local-files": (
         " List the approved patient files, open the relevant ones, and finish "
@@ -323,6 +325,10 @@ class CopilotSkillRunner:
                     trace.event("tool", step=steps, name=name, args=(
                         {} if name == "finish" else values.model_dump()
                     ))
+                    recoverable_sql_verification = (
+                        skill == "sql-desktop" and name == "stop"
+                        and values.reason == "patient_not_verified"
+                    )
                     premature = (
                         (name == "stop" and values.reason != "session_expired")
                         or (name == "finish" and not values.resources)
@@ -332,12 +338,19 @@ class CopilotSkillRunner:
                         trace.event("nudge", step=steps, name=name, count=nudges)
                         story("warn", "The agent wanted to stop early – asked it to "
                               "follow the skill and keep going")
-                        return ToolResult(result_type="failure", error=(
+                        error = (
+                            "Patient verification is still available: use run_query "
+                            "with a narrow patient-only SELECT filtered by the exact "
+                            "requested MRN. Show MRN, given name, family name, date "
+                            "of birth and internal key in one visible row; verify it, "
+                            "then query clinical rows and finish."
+                        ) if recoverable_sql_verification else (
                             "Not done yet: this workflow is supported and the data "
                             "is reachable. Follow the skill recipe step by step "
                             "(observe, click the relevant menu/tile, read values) "
                             "and finish only with observed resources."
-                        ))
+                        )
+                        return ToolResult(result_type="failure", error=error)
                     if name == "stop":
                         raise RuntimeError(
                             f"Skill stopped without verified data: {values.reason}."

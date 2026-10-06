@@ -221,6 +221,38 @@ class ComputerUseTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "session_expired"):
             adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
 
+    def test_sql_patient_not_verified_is_recoverable(self):
+        observation = {
+            "patient_id": "TUS-2026-0417",
+            "resources": [{
+                "resource_type": "observations",
+                "source_id": "lab-HB-1",
+                "data": {"status": "final"},
+            }],
+        }
+
+        async def recover(client):
+            stopped = await client.invoke(
+                "stop", {"reason": "patient_not_verified"}
+            )
+            self.assertEqual("failure", stopped.result_type)
+            self.assertIn("narrow patient-only SELECT", stopped.error)
+            await client.invoke(
+                "run_query",
+                {"sql": (
+                    "SELECT mrn, nome, cognome, data_nascita, paziente_id "
+                    "FROM oncologia_demo.paziente "
+                    "WHERE mrn = N'TUS-2026-0417'"
+                )},
+            )
+            await client.invoke("finish", observation)
+
+        adapter = self.build(recover)
+        result = adapter.retrieve_sql(
+            "TUS-2026-0417", [ResourceType.observations],
+        )
+        self.assertEqual("lab-HB-1", result.resources[0].source_id)
+
     def synthetic_emr(self, **changes):
         return replace(
             settings(), synthetic_portal_enabled=True,
@@ -365,6 +397,8 @@ class ComputerUseTests(unittest.TestCase):
         self.assertTrue(self.desktop.closed)
         prompt = self.client.options["custom_agents"][0]["prompt"]
         self.assertIn("INFORMATION_SCHEMA", prompt)
+        self.assertIn("patient-only query", prompt)
+        self.assertIn("exact requested MRN", prompt)
         self.assertNotIn("OncologiaDemo", prompt)
         self.assertIn("MRN", self.client.skill_text)
 

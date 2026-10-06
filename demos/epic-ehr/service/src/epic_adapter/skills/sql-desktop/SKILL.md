@@ -29,12 +29,19 @@ returns the reason: fix it and retry. Click in the editor if focus was lost.
    `SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`
    (filter with `WHERE TABLE_NAME LIKE ...` once you know candidates).
 3. Find the patient table. The request `patient_id` is the hospital record
-   number (MRN), usually a text column; the integer key is internal. Verify
-   the name and date of birth match.
-4. Join the data tables through the patient key. Latest rows first, `TOP 10`.
-5. Read the grids from the screenshots, then `finish`.
+   number (MRN), usually a text column; the integer key is internal.
+4. **Run a compact patient-only query before reading clinical rows.** Select
+   only the MRN, given name, family name, date of birth and internal key, and
+   filter by the exact requested MRN. The single visible result row is the
+   patient verification: confirm the MRN and name, plus date of birth. Do not
+   stop with `patient_not_verified` while this read-only query is available.
+5. Join the data tables through the verified internal patient key. Include the
+   requested MRN in each clinical query so the visible result grid keeps the
+   patient association explicit. Latest rows first, `TOP 10`.
+6. Read the grids from the screenshots, then `finish`.
 
 **Speed matters (live demo):** at most 5 queries, at most 10 observations.
+Prefer narrow result grids; never use `SELECT *`.
 
 ## Translation to FHIR (finish)
 
