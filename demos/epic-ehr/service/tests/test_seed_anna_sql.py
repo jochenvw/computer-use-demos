@@ -44,6 +44,18 @@ INSERT oncologia_demo.paziente (mrn, nome, cognome, sesso, data_nascita, stato_s
 INSERT oncologia_demo.esame_laboratorio (paziente_id, data_ora, codice, nome_esame,
   valore_numerico, valore_testo, unita, flag_anomalia)
   VALUES (2, '2026-01-01', N'HB', N'Emoglobina', 12, N'12', N'g/dL', 0);
+CREATE TABLE oncologia_demo.episodio (episodio_id int IDENTITY(1,1) PRIMARY KEY,
+  paziente_id int NOT NULL, struttura_id int NOT NULL, uo_id int NULL,
+  numero_nosologico nvarchar(50) NULL, tipo_episodio nvarchar(50) NOT NULL,
+  regime nvarchar(50) NULL, data_inizio datetime2 NOT NULL, data_fine datetime2 NULL,
+  motivo nvarchar(500) NULL, stato nvarchar(30) NOT NULL);
+INSERT oncologia_demo.episodio (paziente_id, struttura_id, uo_id, tipo_episodio, data_inizio, stato)
+  VALUES (1, 1, 2, N'RICOVERO', '2026-01-01', N'APERTO');
+CREATE TABLE oncologia_demo.diagnosi (diagnosi_id int IDENTITY(1,1) PRIMARY KEY,
+  paziente_id int NOT NULL, episodio_id int NULL, sistema_codifica nvarchar(50) NOT NULL,
+  versione_codifica nvarchar(50) NULL, codice nvarchar(50) NOT NULL,
+  descrizione nvarchar(500) NOT NULL, tipo nvarchar(50) NULL, data_diagnosi date NULL,
+  attiva bit NOT NULL);
 """,
 }
 
@@ -88,6 +100,15 @@ class SeedAnnaOncologiaTests(unittest.TestCase):
                     ).split()
                     self.assertEqual({"natural": "2", "identity": "3"}[shape], count)
                     self.assertEqual("18.40", cea)
+                    if shape == "identity":
+                        clinical = _sqlcmd(
+                            "-d", database, "-Q",
+                            "SET NOCOUNT ON; SELECT COUNT(*) FROM oncologia_demo.diagnosi d "
+                            "JOIN oncologia_demo.episodio e ON e.episodio_id = d.episodio_id "
+                            "JOIN oncologia_demo.paziente p ON p.paziente_id = e.paziente_id "
+                            "WHERE p.mrn = N'TUS-2026-0417' AND e.numero_nosologico = N'2026/004417'",
+                        ).split()
+                        self.assertEqual(["4"], clinical)
                 finally:
                     _sqlcmd("-Q", f"ALTER DATABASE [{database}] SET SINGLE_USER WITH ROLLBACK "
                                   f"IMMEDIATE; DROP DATABASE [{database}]")

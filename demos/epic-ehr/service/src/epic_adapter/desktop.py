@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 SW_RESTORE = 9
+SW_MAXIMIZE = 3
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
 MOUSEEVENTF_WHEEL = 0x0800
@@ -129,6 +130,9 @@ class WindowsDesktopSession:
             cwd=str(self.query_path.parent),
         )
         self._window = self._wait_for_window()
+        # A maximized window keeps the results grid readable in screenshots.
+        self._user32.ShowWindow(self._window, SW_MAXIMIZE)
+        time.sleep(1)
         self._focus()
         return self
 

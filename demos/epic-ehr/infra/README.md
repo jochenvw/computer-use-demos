@@ -237,7 +237,9 @@ region; use synthetic data for this demo.
 SSMS connects to `localhost` using Windows authentication. Scenario 3 uses the
 Italian-language `OncologiaDemo` database (`source: sql`, `sql-desktop` skill,
 read-only queries only). Add Anna once with `seed-anna-oncologia.sql`
-(idempotent): `sqlcmd -S localhost -E -d OncologiaDemo -b -i .\seed-anna-oncologia.sql`.
+(idempotent; patient, labs, episode, diagnoses, tumour staging, biomarkers,
+medications, vitals, imaging, pathology, procedures, history, alerts):
+`sqlcmd -S localhost -E -d OncologiaDemo -b -i .\seed-anna-oncologia.sql`.
 `EpicDemo` holds one older synthetic BP record and is not used on stage.
 Use a read-only database identity for the agent; the VM administrator is
 intentionally privileged for initial setup only.

@@ -89,7 +89,8 @@ NAVIGATION_HINTS = {
     "sql-desktop": (
         " Operator hint: the local database is OncologiaDemo, schema "
         "oncologia_demo; patient_id is paziente.mrn. Discover columns via "
-        "INFORMATION_SCHEMA, then query patient and latest labs."
+        "INFORMATION_SCHEMA, then query patient, episodes, diagnoses, "
+        "medications, vitals, labs, imaging and pathology."
     ),
     "local-files": (
         " Operator hint: list the patient files, open the ECG summary, and "
@@ -608,8 +609,25 @@ class CopilotSkillRunner:
                         session.on(record)
                     try:
                         limit = self.settings.skill_timeout_seconds
-                        await asyncio.wait_for(session.send_and_wait(json.dumps(message),
-                                               timeout=limit), timeout=limit + 5)
+                        deadline = loop.time() + limit
+                        prompt = json.dumps(message)
+                        for turn in range(3):
+                            remaining = deadline - loop.time()
+                            if remaining <= 1:
+                                break
+                            await asyncio.wait_for(session.send_and_wait(
+                                prompt, timeout=remaining), timeout=remaining + 5)
+                            if failure is not None or result is not None:
+                                break
+                            # The model may end its turn after a nudge; resume the same session.
+                            trace.event("continue", step=steps, turn=turn + 1)
+                            story("warn", "The agent paused without a result – asked it "
+                                  "to continue the skill")
+                            prompt = json.dumps({"continue": (
+                                "The retrieval is not finished. Continue the skill with "
+                                "the tools (observe, run_query, ...) and end with finish; "
+                                "the data is reachable. Do not reply with text only."
+                            )})
                         if failure is not None:
                             raise failure
                         if result is None:

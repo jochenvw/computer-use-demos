@@ -60,7 +60,7 @@ fallback (`EPIC_NAVIGATION_HINTS=1`, off by default) and are never shown.
 |---|---|---|---|---|
 | 1 | **Clinical data from the EMR** | Finds Anna in the SanitaCartella worklist, opens the chart, reads labs, notes and the admission | Patient, encounter, labs (Emoglobina, CEA, CA 19-9, ...), clinical notes | ~1-2 min (rehearse) |
 | 2 | **Medical imaging from PACS** | Opens the imaging tab, follows the link into MontalcinoPACS, reads the signed MRI report next to the image | DiagnosticReport per study, marked *preliminary* | ~1 min (rehearse) |
-| 3 | **Local Italian database** (unknown schema, Italian column names), already on the VM | Explores `INFORMATION_SCHEMA` in SSMS, writes read-only queries | Patient + labs, translated to FHIR/OMOP | ~1 min |
+| 3 | **Local Italian database** (unknown schema, Italian column names), already on the VM | Explores `INFORMATION_SCHEMA` in SSMS, writes read-only queries | Patient, episode, diagnoses, medications, labs, vitals, imaging and pathology, translated to FHIR/OMOP | ~2-3 min |
 
 Fallback (API / advanced only): **ECG file on this workstation** (`source:
 files`), a synthetic ECG summary for Anna.
@@ -479,7 +479,7 @@ information for patient Anna Ricci.*
 |---|---|---|---|---|
 | 1 | Clinical data from the EMR | `emr-browser` | Finds Anna in the SanitaCartella worklist, opens the chart (Oncologia / Chirurgia view), reads labs, notes, admission | rehearse; target < 2 min |
 | 2 | Medical imaging from PACS | `pacs-viewer` | Opens the Imaging tab, follows the link into MontalcinoPACS, reads the signed MRI report next to the synthetic image -> DiagnosticReport marked preliminary | rehearse; target ~1 min |
-| 3 | Local Italian database | `sql-desktop` | Opens SSMS, explores `INFORMATION_SCHEMA`, writes read-only queries on the Italian schema -> Patient + labs | ~1 min |
+| 3 | Local Italian database | `sql-desktop` | Opens SSMS, explores `INFORMATION_SCHEMA`, writes read-only queries on the Italian schema -> Patient, episode, diagnoses, medications, labs, vitals, imaging, pathology | ~2-3 min |
 | - | ECG fallback (API / Details) | `local-files` | Opens the synthetic ECG summary in the approved file roots, transcribes printed values only | ~30 s |
 
 Before the demo:

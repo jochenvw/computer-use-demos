@@ -24,7 +24,7 @@ $headers = @{
 $request = @{
     emr = @{ source = 'ehr'; resources = @('patient', 'encounters', 'observations', 'documents') }
     pacs = @{ source = 'pacs'; resources = @('imaging') }
-    sql = @{ source = 'sql'; resources = @('patient', 'observations') }
+    sql = @{ source = 'sql'; resources = @('patient', 'encounters', 'observations', 'documents', 'imaging') }
     files = @{ source = 'files'; resources = @('ecg', 'observations') }
 }[$Scenario]
 # Same visible task for every scenario; the agent discovers where the data lives.

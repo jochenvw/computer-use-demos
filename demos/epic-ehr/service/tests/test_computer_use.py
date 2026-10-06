@@ -117,7 +117,12 @@ class FakeClient:
         return result
 
     async def send_and_wait(self, prompt, *, timeout):
-        self.prompt = json.loads(prompt)
+        self.prompts = getattr(self, "prompts", []) + [json.loads(prompt)]
+        if len(self.prompts) > 1:
+            for name, values in getattr(self, "followup", []):
+                await self.invoke(name, values)
+            return
+        self.prompt = self.prompts[0]
         self.timeout = timeout
         if callable(self.script):
             await self.script(self)
@@ -187,6 +192,20 @@ class ComputerUseTests(unittest.TestCase):
         adapter = self.build([("observe", {}), ("finish", patient_result("OTHER"))])
         with self.assertRaises(RuntimeError):
             adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
+
+    def test_session_resumes_when_model_ends_turn_after_nudge(self):
+        adapter = self.build([("observe", {}), ("stop", {"reason": "unavailable_data"})])
+        self.client.followup = [("finish", patient_result())]
+        result = adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
+        self.assertEqual(1, len(result))
+        self.assertEqual(2, len(self.client.prompts))
+        self.assertIn("continue", self.client.prompts[1])
+
+    def test_session_fails_after_bounded_continuations(self):
+        adapter = self.build([("observe", {})])
+        with self.assertRaisesRegex(RuntimeError, "without a validated finish"):
+            adapter.retrieve("TUS-2026-0417", [ResourceType.patient])
+        self.assertEqual(3, len(self.client.prompts))
 
     def test_host_assigns_requested_subject(self):
         adapter = self.build([("observe", {}), ("finish", {
